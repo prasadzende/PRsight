@@ -1,0 +1,114 @@
+{
+  "pr": {
+    "owner": "acme-org",
+    "repo": "acme-platform-gateway",
+    "number": 34,
+    "title": "424242 - Gateway enforces usage quotas",
+    "author": "sam-dev",
+    "draft": false,
+    "state": "open",
+    "branch": "feature/424242-gateway-quota",
+    "base": "main",
+    "url": "https://github.com/acme-org/acme-platform-gateway/pull/34",
+    "body": "This pull request makes the gateway read monthlyBudget and usagePlanTier from the usage record and apply the per-team rate limit.\n\nIt adds a quota alert setting with its schema entry.",
+    "additions": 81,
+    "deletions": 0,
+    "changedFiles": 6,
+    "updatedAt": "2026-10-20T10:00:00Z",
+    "headSha": "3434343434343434343434343434343434343434",
+    "requestedReviewers": [],
+    "requestedTeams": []
+  },
+  "files": [
+    {
+      "path": "terraform/gateway/modules/apim/policies/usage-quota.xml",
+      "status": "modified",
+      "additions": 60,
+      "deletions": 0,
+      "patch": "@@ -1,6 +1,12 @@\n <policies>\n   <inbound>\n+    <set-variable name=\"monthlyBudget\" value=\"@(context.Variables.GetValueOrDefault&lt;JObject&gt;(&quot;usage&quot;)[&quot;monthlyBudget&quot;])\" />\n+    <set-variable name=\"usagePlanTier\" value=\"@(context.Variables.GetValueOrDefault&lt;JObject&gt;(&quot;usage&quot;)[&quot;usagePlanTier&quot;])\" />\n+    <rate-limit-by-key calls=\"@((int)context.Variables[&quot;usage&quot;][&quot;rpm&quot;])\" renewal-period=\"60\" counter-key=\"@(context.Subscription.Id)\" />\n+    <choose>\n+      <when condition=\"@((string)context.Variables[&quot;usagePlanTier&quot;] == &quot;free&quot;)\" />\n+    </choose>\n   </inbound>\n </policies>"
+    },
+    {
+      "path": "terraform/gateway/modules/apim/variables.tf",
+      "status": "modified",
+      "additions": 6,
+      "deletions": 0,
+      "patch": "@@ -20,3 +20,9 @@ variable \"gateway_name\" {\n }\n+\n+variable \"quota_alert_percent\" {\n+  description = \"Percentage of the monthly budget at which teams are warned\"\n+  type        = number\n+  default     = 80\n+}"
+    },
+    {
+      "path": "config/gateway/dev.yaml",
+      "status": "modified",
+      "additions": 1,
+      "deletions": 0,
+      "patch": "@@ -4,3 +4,4 @@ gatewayName: acme-gw-dev\n region: westeurope\n+quotaAlertPercent: 80"
+    },
+    {
+      "path": "config/gateway/config.schema.json",
+      "status": "modified",
+      "additions": 4,
+      "deletions": 0,
+      "patch": "@@ -10,6 +10,10 @@\n     \"region\": { \"type\": \"string\" },\n+    \"quotaAlertPercent\": {\n+      \"type\": \"integer\",\n+      \"minimum\": 1\n+    },\n     \"gatewayName\": { \"type\": \"string\" }"
+    },
+    {
+      "path": ".ci/templates/terraform-plan.yaml",
+      "status": "added",
+      "additions": 6,
+      "deletions": 0,
+      "patch": "@@ -0,0 +1,6 @@\n+parameters:\n+  - name: workingDir\n+    type: string\n+steps:\n+  - script: terraform plan -input=false\n+    workingDirectory: ${{ parameters.workingDir }}"
+    },
+    {
+      "path": "terraform/gateway/tests/apim.tftest.hcl",
+      "status": "modified",
+      "additions": 4,
+      "deletions": 0,
+      "patch": "@@ -10,3 +10,7 @@ run \"policy\" {\n }\n+\n+run \"alert_percent\" {\n+  variables { quota_alert_percent = 80 }\n+}"
+    }
+  ],
+  "contents": {
+    "terraform/gateway/modules/apim/policies/usage-quota.xml": "<policies>\n  <inbound>\n    <set-variable name=\"monthlyBudget\" value=\"@(context.Variables.GetValueOrDefault&lt;JObject&gt;(&quot;usage&quot;)[&quot;monthlyBudget&quot;])\" />\n    <set-variable name=\"usagePlanTier\" value=\"@(context.Variables.GetValueOrDefault&lt;JObject&gt;(&quot;usage&quot;)[&quot;usagePlanTier&quot;])\" />\n    <rate-limit-by-key calls=\"@((int)context.Variables[&quot;usage&quot;][&quot;rpm&quot;])\" renewal-period=\"60\" counter-key=\"@(context.Subscription.Id)\" />\n    <choose>\n      <when condition=\"@((string)context.Variables[&quot;usagePlanTier&quot;] == &quot;free&quot;)\" />\n    </choose>\n  </inbound>\n</policies>\n",
+    "terraform/gateway/modules/apim/variables.tf": "variable \"gateway_name\" {\n  description = \"Name of the API gateway\"\n  type        = string\n}\n\nvariable \"quota_alert_percent\" {\n  description = \"Percentage of the monthly budget at which teams are warned\"\n  type        = number\n  default     = 80\n}\n",
+    "config/gateway/dev.yaml": "gatewayName: acme-gw-dev\nregion: westeurope\nquotaAlertPercent: 80\n",
+    "config/gateway/config.schema.json": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"region\": { \"type\": \"string\" },\n    \"quotaAlertPercent\": {\n      \"type\": \"integer\",\n      \"minimum\": 1\n    },\n    \"gatewayName\": { \"type\": \"string\" }\n  }\n}\n",
+    ".ci/templates/terraform-plan.yaml": "parameters:\n  - name: workingDir\n    type: string\nsteps:\n  - script: terraform plan -input=false\n    workingDirectory: ${{ parameters.workingDir }}\n",
+    "terraform/gateway/tests/apim.tftest.hcl": "run \"policy\" {\n}\n\nrun \"alert_percent\" {\n  variables { quota_alert_percent = 80 }\n}\n"
+  },
+  "reviewComments": [
+    {
+      "id": 3401,
+      "inReplyTo": null,
+      "path": "terraform/gateway/modules/apim/policies/usage-quota.xml",
+      "line": 5,
+      "originalLine": 5,
+      "diffHunk": "@@ -1,6 +1,12 @@\n+    <rate-limit-by-key calls=\"...\" />",
+      "author": "Copilot",
+      "isBot": true,
+      "body": "This policy still reads the old rpm field; consider switching it to requestsPerMinute once the module change is in.",
+      "createdAt": "2026-10-20T11:00:00Z"
+    }
+  ],
+  "issueComments": [
+    {
+      "id": 3451,
+      "author": "lee-reviewer",
+      "isBot": false,
+      "body": "Please merge after the module PR.",
+      "createdAt": "2026-10-20T12:00:00Z"
+    }
+  ],
+  "commits": [
+    {
+      "sha": "0000000000000000000000000000000000000001",
+      "message": "424242 read budget and tier in the gateway"
+    },
+    {
+      "sha": "0000000000000000000000000000000000000002",
+      "message": "Add quota alert setting"
+    },
+    {
+      "sha": "0000000000000000000000000000000000000003",
+      "message": "Add plan template"
+    }
+  ],
+  "ruleFiles": {
+    ".github/copilot-instructions.md": "# Copilot instructions for acme-platform-gateway\n\n## Pipelines\n- Every file in `.ci/templates/` must be prefixed with its tool, `terraform-` or `bicep-`.\n\n## YAML\nAlways use the `.yaml` extension. Never use `.yml`. Existing `.yml` files under `.github/` keep their names.\n\n## Configuration\nWhenever a key is added or removed, you **must** update `config/<deployment>/config.schema.json` in the same pull request.\n\n## Terraform\nAlways give variables a `description` and `type`.\n\n- **Keep modules focused**: one module, one job.\n"
+  }
+}

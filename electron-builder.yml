@@ -1,0 +1,28 @@
+appId: com.prsight.app
+productName: PRsight
+directories:
+  buildResources: build
+files:
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!tests/*'
+  - '!scripts/*'
+  - '!docs/*'
+  - '!{electron.vite.config.ts,vitest.config.ts,eslint.config.mjs,tsconfig*.json,.prettierrc,CLAUDE.md,README.md}'
+asarUnpack:
+  - '**/*.node'
+mac:
+  icon: build/icon.png
+  category: public.app-category.developer-tools
+  target: [dmg, zip]
+  hardenedRuntime: true
+  notarize: false # set to true once an Apple Developer ID is configured in CI
+win:
+  icon: build/icon.png
+  target: [nsis]
+nsis:
+  oneClick: false
+  perMachine: false
+linux:
+  icon: build/icon.png
+  target: [AppImage]

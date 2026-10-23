@@ -1,0 +1,53 @@
+{
+  "pr": {
+    "owner": "acme-org",
+    "repo": "acme-platform",
+    "number": 50,
+    "title": "424242 - ADR for per-team usage quotas",
+    "author": "sam-dev",
+    "draft": false,
+    "state": "open",
+    "branch": "docs/424242-usage-quotas-adr",
+    "base": "main",
+    "url": "https://github.com/acme-org/acme-platform/pull/50",
+    "body": "This pull request adds the design record for per-team usage quotas and the requestsPerMinute name.",
+    "additions": 11,
+    "deletions": 0,
+    "changedFiles": 1,
+    "updatedAt": "2026-10-20T10:00:00Z",
+    "headSha": "5050505050505050505050505050505050505050",
+    "requestedReviewers": [],
+    "requestedTeams": [
+      "architecture"
+    ]
+  },
+  "files": [
+    {
+      "path": "docs/design/ADR-0007-usage-quotas.md",
+      "status": "added",
+      "additions": 11,
+      "deletions": 0,
+      "patch": "@@ -0,0 +1,13 @@\n+# ADR-0007 \u2014 Per-team usage quotas\n+\n+## Status\n+Accepted\n+\n+## Decision\n+Teams set `requestsPerMinute` and a `dailyLimit` in their config. The usage quota module writes `monthlyBudget` and `usagePlanTier` into the usage record, and the gateway reads them on every call.\n+\n+## Consequences\n+- The old `rpm` name is retired everywhere.\n+- Config, module and gateway changes ship together."
+    }
+  ],
+  "contents": {
+    "docs/design/ADR-0007-usage-quotas.md": "# ADR-0007 \u2014 Per-team usage quotas\n\n## Status\nAccepted\n\n## Decision\nTeams set `requestsPerMinute` and a `dailyLimit` in their config. The usage quota module writes `monthlyBudget` and `usagePlanTier` into the usage record, and the gateway reads them on every call.\n\n## Consequences\n- The old `rpm` name is retired everywhere.\n- Config, module and gateway changes ship together.\n"
+  },
+  "reviewComments": [],
+  "issueComments": [
+    {
+      "id": 5051,
+      "author": "lee-reviewer",
+      "isBot": false,
+      "body": "Thanks, this matches the PRs.",
+      "createdAt": "2026-10-20T12:00:00Z"
+    }
+  ],
+  "commits": [
+    {
+      "sha": "0000000000000000000000000000000000000001",
+      "message": "424242 add usage quotas ADR"
+    }
+  ],
+  "ruleFiles": {}
+}

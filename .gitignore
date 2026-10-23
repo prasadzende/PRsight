@@ -1,0 +1,13 @@
+node_modules/
+out/
+dist/
+*.log
+.env
+.env.*
+.DS_Store
+test-results/
+playwright-report/
+*.tsbuildinfo
+*.sqlite
+*.sqlite-*
+coverage/

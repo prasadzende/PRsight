@@ -1,0 +1,102 @@
+{
+  "pr": {
+    "owner": "acme-org",
+    "repo": "acme-platform-lib",
+    "number": 18,
+    "title": "424242 - Usage quota module reads requestsPerMinute",
+    "author": "sam-dev",
+    "draft": false,
+    "state": "open",
+    "branch": "feature/424242-usage-record",
+    "base": "main",
+    "url": "https://github.com/acme-org/acme-platform-lib/pull/18",
+    "body": "This pull request updates the usage quota module to read requestsPerMinute and to write monthlyBudget and usagePlanTier into the usage record the gateway reads.\n\nIt also retires the old shared master key.",
+    "additions": 10,
+    "deletions": 3,
+    "changedFiles": 3,
+    "updatedAt": "2026-10-20T10:00:00Z",
+    "headSha": "1818181818181818181818181818181818181818",
+    "requestedReviewers": [],
+    "requestedTeams": [
+      "platform-reviewers"
+    ]
+  },
+  "files": [
+    {
+      "path": "terraform/modules/usage_quota/main.tf",
+      "status": "modified",
+      "additions": 8,
+      "deletions": 1,
+      "patch": "@@ -12,10 +12,14 @@ locals {\n locals {\n-  rpm = var.team.rpm\n+  requestsPerMinute = var.team.requestsPerMinute\n }\n\n resource \"azapi_resource\" \"usage_record\" {\n   body = {\n+    monthlyBudget = var.team.budget\n+    usagePlanTier = var.team.tier\n+    requestsPerMinute = local.requestsPerMinute\n   }\n }\n\n+resource \"azapi_resource_action\" \"retire_master_key\" {\n+  type   = \"subscriptions/master\"\n+  method = \"DELETE\"\n+}"
+    },
+    {
+      "path": "terraform/modules/usage_quota/variables.tf",
+      "status": "modified",
+      "additions": 1,
+      "deletions": 1,
+      "patch": "@@ -3,7 +3,7 @@ variable \"team\" {\n   type = object({\n-    rpm = number\n+    requestsPerMinute = number\n     budget = number\n     tier = string\n   })"
+    },
+    {
+      "path": "terraform/tests/usage_quota.tftest.hcl",
+      "status": "modified",
+      "additions": 1,
+      "deletions": 1,
+      "patch": "@@ -5,4 +5,4 @@ run \"quota\" {\n   assert {\n-    condition = local.rpm == 600\n+    condition = local.requestsPerMinute == 600\n   }"
+    }
+  ],
+  "contents": {
+    "terraform/modules/usage_quota/main.tf": "locals {\n  requestsPerMinute = var.team.requestsPerMinute\n}\n\nresource \"azapi_resource\" \"usage_record\" {\n  body = {\n    monthlyBudget = var.team.budget\n    usagePlanTier = var.team.tier\n    requestsPerMinute = local.requestsPerMinute\n  }\n}\n\nresource \"azapi_resource_action\" \"retire_master_key\" {\n  type   = \"subscriptions/master\"\n  method = \"DELETE\"\n}\n",
+    "terraform/modules/usage_quota/variables.tf": "variable \"team\" {\n  description = \"Team quota settings\"\n  type = object({\n    requestsPerMinute = number\n    budget = number\n    tier = string\n  })\n}\n",
+    "terraform/tests/usage_quota.tftest.hcl": "run \"quota\" {\n  assert {\n    condition = local.requestsPerMinute == 600\n  }\n}\n"
+  },
+  "reviewComments": [
+    {
+      "id": 1801,
+      "inReplyTo": null,
+      "path": "terraform/modules/usage_quota/main.tf",
+      "line": 24,
+      "originalLine": 24,
+      "diffHunk": "@@ -12,10 +12,14 @@ locals {\n+  method = \"DELETE\"",
+      "author": "Copilot",
+      "isBot": true,
+      "body": "The master subscription cannot be deleted while products still reference it, so this apply will fail on first run.",
+      "createdAt": "2026-10-20T11:00:00Z"
+    },
+    {
+      "id": 1802,
+      "inReplyTo": null,
+      "path": "terraform/modules/usage_quota/variables.tf",
+      "line": 5,
+      "originalLine": 5,
+      "diffHunk": "@@ -3,7 +3,7 @@ variable \"team\" {\n+    requestsPerMinute = number",
+      "author": "Copilot",
+      "isBot": true,
+      "body": "Add a validation block so requestsPerMinute must be a positive whole number.",
+      "createdAt": "2026-10-20T11:00:00Z"
+    }
+  ],
+  "issueComments": [
+    {
+      "id": 1851,
+      "author": "lee-reviewer",
+      "isBot": false,
+      "body": "Needs the config PR to go in at the same time.",
+      "createdAt": "2026-10-20T12:00:00Z"
+    }
+  ],
+  "commits": [
+    {
+      "sha": "0000000000000000000000000000000000000001",
+      "message": "424242 module reads requestsPerMinute"
+    },
+    {
+      "sha": "0000000000000000000000000000000000000002",
+      "message": "Write budget and tier into the usage record"
+    },
+    {
+      "sha": "0000000000000000000000000000000000000003",
+      "message": "Retire master key"
+    }
+  ],
+  "ruleFiles": {}
+}

@@ -1,0 +1,51 @@
+name: Bug report
+description: Something doesn't work as it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Found a security problem? Don't use this form; see SECURITY.md.
+        Please don't paste tokens, keys, private repo names or code you're not allowed to share.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Select two PRs
+        2. Click Build Report
+        3. …
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: PRsight version or commit
+      placeholder: 0.1.0, or a commit SHA
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options: [macOS, Windows, Linux]
+    validations:
+      required: true
+  - type: dropdown
+    id: ai
+    attributes:
+      label: AI provider (if relevant)
+      options: [AI off, Claude Code, Anthropic API, OpenAI, Google Gemini, Microsoft Foundry, Azure OpenAI, Amazon Bedrock, Google Vertex AI]
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Terminal output from `pnpm dev` (lines starting with [prsight]) or screenshots. Remove anything private first.
+      render: shell

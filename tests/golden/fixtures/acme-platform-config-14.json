@@ -1,0 +1,92 @@
+{
+  "pr": {
+    "owner": "acme-org",
+    "repo": "acme-platform-config",
+    "number": 14,
+    "title": "424242 - Rename rpm to requestsPerMinute in team config",
+    "author": "sam-dev",
+    "draft": false,
+    "state": "open",
+    "branch": "feature/424242-requests-per-minute",
+    "base": "main",
+    "url": "https://github.com/acme-org/acme-platform-config/pull/14",
+    "body": "This pull request renames the per-team rate limit key from rpm to requestsPerMinute so the name says what it counts.\n\nIt also lowers the alpha dev daily limit while the new quota is tested.\n\n## Testing\n- Schema validation passes for every team file.",
+    "additions": 5,
+    "deletions": 5,
+    "changedFiles": 4,
+    "updatedAt": "2026-10-20T10:00:00Z",
+    "headSha": "1414141414141414141414141414141414141414",
+    "requestedReviewers": [],
+    "requestedTeams": []
+  },
+  "files": [
+    {
+      "path": "team/team.config.schema.json",
+      "status": "modified",
+      "additions": 1,
+      "deletions": 1,
+      "patch": "@@ -40,7 +40,7 @@\n       \"properties\": {\n-        \"rpm\": { \"type\": \"integer\", \"minimum\": 1 },\n+        \"requestsPerMinute\": { \"type\": \"integer\", \"minimum\": 1 },\n         \"dailyLimit\": { \"type\": \"integer\", \"minimum\": 0 }\n       }"
+    },
+    {
+      "path": "team/alpha/dev/config.yaml",
+      "status": "modified",
+      "additions": 2,
+      "deletions": 2,
+      "patch": "@@ -8,6 +8,6 @@ quota:\n quota:\n-  rpm: 600\n-  dailyLimit: 2000000\n+  requestsPerMinute: 600\n+  dailyLimit: 100000\n   alerts: true"
+    },
+    {
+      "path": "team/alpha/prod/config.yaml",
+      "status": "modified",
+      "additions": 1,
+      "deletions": 1,
+      "patch": "@@ -8,5 +8,5 @@ quota:\n quota:\n-  rpm: 1200\n+  requestsPerMinute: 1200\n   dailyLimit: 5000000"
+    },
+    {
+      "path": "tests/fixtures/team/example/config.yaml",
+      "status": "modified",
+      "additions": 1,
+      "deletions": 1,
+      "patch": "@@ -1,4 +1,4 @@\n quota:\n-  rpm: 10\n+  requestsPerMinute: 10\n   dailyLimit: 1000"
+    }
+  ],
+  "contents": {
+    "team/team.config.schema.json": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"quota\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"requestsPerMinute\": { \"type\": \"integer\", \"minimum\": 1 },\n        \"dailyLimit\": { \"type\": \"integer\", \"minimum\": 0 }\n      }\n    }\n  }\n}\n",
+    "team/alpha/dev/config.yaml": "team: alpha\nquota:\n  requestsPerMinute: 600\n  dailyLimit: 100000\n  alerts: true\n",
+    "team/alpha/prod/config.yaml": "team: alpha\nquota:\n  requestsPerMinute: 1200\n  dailyLimit: 5000000\n",
+    "tests/fixtures/team/example/config.yaml": "quota:\n  requestsPerMinute: 10\n  dailyLimit: 1000\n"
+  },
+  "reviewComments": [
+    {
+      "id": 1401,
+      "inReplyTo": null,
+      "path": "team/team.config.schema.json",
+      "line": 43,
+      "originalLine": 43,
+      "diffHunk": "@@ -40,7 +40,7 @@\n+        \"requestsPerMinute\": { \"type\": \"integer\", \"minimum\": 1 },",
+      "author": "Copilot",
+      "isBot": true,
+      "body": "Consider adding a maximum to requestsPerMinute so a typo cannot grant an unbounded rate.",
+      "createdAt": "2026-10-20T11:00:00Z"
+    }
+  ],
+  "issueComments": [
+    {
+      "id": 1451,
+      "author": "lee-reviewer",
+      "isBot": false,
+      "body": "Looks good. Let's merge this with the module change.",
+      "createdAt": "2026-10-20T12:00:00Z"
+    }
+  ],
+  "commits": [
+    {
+      "sha": "0000000000000000000000000000000000000001",
+      "message": "424242 rename rpm to requestsPerMinute"
+    },
+    {
+      "sha": "0000000000000000000000000000000000000002",
+      "message": "Lower alpha dev daily limit"
+    }
+  ],
+  "ruleFiles": {}
+}

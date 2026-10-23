@@ -1,0 +1,77 @@
+{
+  "name": "pr-graph",
+  "productName": "PRsight",
+  "version": "0.1.0",
+  "description": "Review several related pull requests together: a rule-based map of how their files connect, with findings, a checklist and optional AI.",
+  "main": "./out/main/index.js",
+  "author": "Prasad Zende",
+  "license": "MIT",
+  "private": true,
+  "packageManager": "pnpm@10.12.1",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "node scripts/dev-app-name.mjs && electron-vite dev",
+    "build": "electron-vite build",
+    "start": "node scripts/dev-app-name.mjs && electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "test": "vitest run",
+    "test:golden": "vitest run tests/golden",
+    "e2e": "pnpm build && playwright test",
+    "package": "pnpm build && electron-builder",
+    "package:mac": "pnpm build && electron-builder --mac",
+    "package:win": "pnpm build && electron-builder --win",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "dependencies": {
+    "@azure/msal-node": "^3.6.0",
+    "better-sqlite3": "^12.2.0",
+    "drizzle-orm": "^0.44.0",
+    "electron-updater": "^6.6.0",
+    "zod": "^4.0.0"
+  },
+  "optionalDependencies": {
+    "@anthropic-ai/bedrock-sdk": "^0.24.0",
+    "@anthropic-ai/vertex-sdk": "^0.13.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.30.0",
+    "@playwright/test": "^1.55.0",
+    "@radix-ui/react-dialog": "^1.1.14",
+    "@radix-ui/react-popover": "^1.1.14",
+    "@radix-ui/react-switch": "^1.2.5",
+    "@tailwindcss/vite": "^4.1.0",
+    "@tanstack/react-query": "^5.80.0",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^22.15.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "@xyflow/react": "^12.8.0",
+    "electron": "^38.0.0",
+    "electron-builder": "^26.0.0",
+    "electron-vite": "^4.0.0",
+    "eslint": "^9.30.0",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "globals": "^16.3.0",
+    "prettier": "^3.6.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "tailwindcss": "^4.1.0",
+    "typescript": "^5.9.0",
+    "typescript-eslint": "^8.38.0",
+    "vite": "^7.0.0",
+    "vitest": "^3.2.0",
+    "zustand": "^5.0.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "electron",
+      "esbuild"
+    ]
+  }
+}
