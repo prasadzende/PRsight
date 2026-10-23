@@ -51,7 +51,7 @@
     "@types/react-dom": "^19.1.0",
     "@vitejs/plugin-react": "^5.0.0",
     "@xyflow/react": "^12.8.0",
-    "electron": "^38.0.0",
+    "electron": "^44.9.2",
     "electron-builder": "^26.0.0",
     "electron-vite": "^4.0.0",
     "eslint": "^9.30.0",
