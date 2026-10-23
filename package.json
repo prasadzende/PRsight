@@ -29,13 +29,13 @@
   "dependencies": {
     "@azure/msal-node": "^3.6.0",
     "better-sqlite3": "^12.2.0",
-    "drizzle-orm": "^0.44.0",
+    "drizzle-orm": "^0.45.4",
     "electron-updater": "^6.6.0",
     "zod": "^4.0.0"
   },
   "optionalDependencies": {
-    "@anthropic-ai/bedrock-sdk": "^0.24.0",
-    "@anthropic-ai/vertex-sdk": "^0.13.0"
+    "@anthropic-ai/bedrock-sdk": "^0.36.0",
+    "@anthropic-ai/vertex-sdk": "^0.22.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.30.0",
