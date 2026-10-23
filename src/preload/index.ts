@@ -4,7 +4,7 @@ import type { Api } from '../shared/ipc';
 import { CHANNEL_NAMES } from '../shared/channelNames';
 
 const allowed = new Set<string>(CHANNEL_NAMES);
-const events = new Set(['report:progress', 'menu:command', 'settings:changed']);
+const events = new Set(['report:progress', 'menu:command', 'settings:changed', 'update:state']);
 
 const api: Api = {
   invoke: (channel, input) => {

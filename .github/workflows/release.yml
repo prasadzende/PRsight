@@ -1,0 +1,91 @@
+# Builds PRsight on every push to main and publishes a GitHub Release with the installers.
+# The app checks the latest release for updates (src/main/updates.ts).
+#
+# Version: the first two numbers in package.json plus this workflow's run number, e.g. 0.1.27.
+# Bump "version" in package.json (e.g. to 0.2.0) to start a new minor line.
+name: release
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['**.md', 'docs/**', '.github/ISSUE_TEMPLATE/**', '.github/pull_request_template.md']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# One release at a time, in push order.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: version
+        name: Work out the version
+        run: |
+          base=$(node -p "require('./package.json').version.split('.').slice(0, 2).join('.')")
+          echo "version=${base}.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+      # A draft is invisible to the app, so nobody is offered an update until every build is uploaded.
+      - name: Create a draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v="${{ steps.version.outputs.version }}"
+          gh release create "v$v" --repo "$GITHUB_REPOSITORY" --draft --target "$GITHUB_SHA" --title "PRsight $v" --generate-notes
+
+  build:
+    needs: prepare
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - os: macos-latest
+            platform: --mac
+          - os: windows-latest
+            platform: --win
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - name: Set the version for this build
+        run: npm pkg set version=${{ needs.prepare.outputs.version }}
+      - run: pnpm build
+      - name: Build the installers and upload them to the draft release
+        run: pnpm exec electron-builder ${{ matrix.platform }} --publish always
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # Unsigned builds: don't pick up any certificate on the runner.
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+  publish:
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "v${{ needs.prepare.outputs.version }}" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+
+  clean-up:
+    needs: [prepare, build]
+    if: failure() && needs.prepare.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete the unfinished draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release delete "v${{ needs.prepare.outputs.version }}" --repo "$GITHUB_REPOSITORY" --yes || true

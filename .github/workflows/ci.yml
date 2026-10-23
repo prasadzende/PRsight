@@ -1,8 +1,8 @@
+# Checks every pull request. Pushes to main are checked and released by release.yml.
 name: ci
 on:
   pull_request:
-  push:
-    branches: [main]
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:

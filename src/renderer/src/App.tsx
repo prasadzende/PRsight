@@ -10,6 +10,7 @@ import { PrDetails } from './components/PrDetails';
 import { ReportView } from './components/Report';
 import { Inspector } from './components/Inspector';
 import { Settings } from './components/Settings';
+import { UpdateBar } from './components/UpdateBar';
 import { Icon, ICONS, Resizer, Seg, Spinner } from './components/ui';
 
 import { useDarkMode } from './theme';
@@ -104,6 +105,7 @@ export function App() {
       {s.sideOpen && !fullMap && <Resizer label="Resize sidebar" width={s.widths.side} onResize={(w) => s.setWidth('side', w)} />}
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', background: 'var(--win)' }}>
         <Toolbar inReport={inReport} loading={prs.isFetching} onRefresh={() => void refreshAll()} />
+        <UpdateBar />
         {prs.error && !inReport && <div className="card" style={{ margin: 12, padding: '8px 12px', color: 'var(--gap)', fontSize: 12.5 }}>Couldn’t load pull requests: {errText(prs.error)}</div>}
         <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
           {!inReport && <PrList loading={prs.isLoading && !cached.data?.items.length} />}

@@ -5,7 +5,8 @@ import type { ProviderId, SecretName, Settings as S } from '@shared/ipc';
 import { call, errText } from '../api';
 import { useApp } from '../store';
 import { explainReport } from '../actions';
-import { Icon, Seg, Switch } from './ui';
+import { Icon, Seg, Spinner, Switch } from './ui';
+import { useUpdateState } from './UpdateBar';
 
 type Tab = 'general' | 'accounts' | 'boards' | 'ai' | 'privacy';
 const TABS: Array<[Tab, string, string, string]> = [
@@ -343,7 +344,8 @@ function Privacy({ st, save }: P) {
     <>
       <Grp>
         <Row label="Check for updates"><Select value={p.updateCheck} label="Check for updates" onChange={(v) => void save({ privacy: { ...p, updateCheck: v } })} options={[['daily', 'Once a day'], ['weekly', 'Once a week'], ['off', 'Never']]} /></Row>
-        <Row label="Update source"><span className="t2" style={{ fontSize: 12.5 }}>{p.updateFeed ? new URL(p.updateFeed).hostname : 'Internal feed (set by your administrator)'}</span></Row>
+        <Row label="Update source"><span className="t2" style={{ fontSize: 12.5 }}>{p.updateFeed ? new URL(p.updateFeed).hostname : 'GitHub Releases (prasadzende/PRsight)'}</span></Row>
+        <UpdateRow />
       </Grp>
       <Cap />
       <Grp>
@@ -384,5 +386,42 @@ function ExplainOpenReport({ enabled }: { enabled: boolean }) {
       <span style={{ flex: 1, fontSize: 12.5 }}>AI is on. Add AI explanations to the report you have open?</span>
       <button className="prominent" disabled={s.explaining} onClick={() => { s.set({ settingsOpen: false }); void explainReport(); }}>{s.explaining ? 'Explaining…' : 'Explain Report'}</button>
     </div>
+  );
+}
+
+/** Version, the last update result, and Check Now. Results also show in the update bar. */
+function UpdateRow() {
+  const u = useUpdateState();
+  const [busy, setBusy] = useState(false);
+  const status = !u
+    ? ''
+    : u.status === 'checking'
+      ? 'Checking…'
+      : u.status === 'none'
+        ? `Up to date · checked ${new Date(u.checkedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`
+        : u.status === 'available'
+          ? `Version ${u.version} is available`
+          : u.status === 'downloading'
+            ? `Downloading ${u.version}… ${u.percent}%`
+            : u.status === 'ready'
+              ? `Version ${u.version} is ready: restart to install`
+              : u.status === 'error'
+                ? u.message
+                : 'Not checked yet';
+  const check = async () => {
+    setBusy(true);
+    try {
+      await call('update:check');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Row label={`Version ${u?.current ?? ''}`} sub={status}>
+      <button className="push" onClick={() => void check()} disabled={busy || u?.status === 'checking' || u?.status === 'downloading'} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        {busy && <Spinner />}
+        Check Now
+      </button>
+    </Row>
   );
 }

@@ -67,6 +67,10 @@ These protect users' data and accounts, so PRs that break them can't be merged.
 - **Evidence:** parsers decide links; AI only explains them. Every link and finding carries evidence (path, line, snippet).
 - **Renderer settings:** `contextIsolation` and `sandbox` stay on, `nodeIntegration` stays off, and the strict CSP stays.
 
+## Releases
+
+Every merge to `main` builds and publishes a new release (see the Releases section in the README). Keep `main` releasable: merge only when CI is green.
+
 ## Tests
 
 - **Unit tests** (`tests/*.test.ts`) cover the analysis, settings, schemas and redaction.

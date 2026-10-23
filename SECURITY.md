@@ -27,6 +27,7 @@ These are the controls a report might show to be broken:
 - **Renderer isolation:** `contextIsolation` and `sandbox` are on and `nodeIntegration` is off. The window can only call the typed IPC channels in `src/shared/ipc.ts`, and every one of them is validated with Zod.
 - **GitHub writes:** only comments, replies, reviews and resolving or unresolving review threads, each run only after an explicit click.
 - **AI:** off by default. When it's on, text is redacted before sending (tokens, keys, IDs and email addresses are removed), and replies are validated against strict schemas.
+- **Updates:** the app reads the latest GitHub Release of this repository. On Windows, electron-updater checks the downloaded installer against the SHA-512 in the release's `latest.yml` before running it. Nothing downloads or installs without a click.
 - **Local data:** reports and cache are kept in a local SQLite database. You can clear them in **Settings › Privacy & Data**.
 
 ## Out of scope

@@ -42,4 +42,8 @@ export const CHANNEL_NAMES = [
   'data:deleteAll',
   'app:openExternal',
   'app:info',
+  'update:get',
+  'update:check',
+  'update:download',
+  'update:install',
 ] as const;

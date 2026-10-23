@@ -4,6 +4,13 @@ Notable changes to PRsight. The format follows [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+### Added
+- **Prebuilt downloads:** for macOS (Apple Silicon and Intel) and Windows, published to GitHub Releases on every push to `main`.
+- **In-app updates:**
+  - The app checks for new versions at launch and on a schedule, and shows a bar when one is available.
+  - On Windows it downloads and installs with one click. On a Mac it opens the new release for download.
+  - **Check for Updates…** is in the app menu, and Settings › Privacy & Data shows your version and has a Check Now button.
+
 ## [0.1.0] - 2026-10-24
 
 First public release.

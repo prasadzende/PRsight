@@ -260,6 +260,11 @@ export const Channels = {
 
   'app:openExternal': z.object({ url: z.string().url() }),
   'app:info': z.void(),
+
+  'update:get': z.void(),
+  'update:check': z.void(),
+  'update:download': z.void(),
+  'update:install': z.void(),
 } as const;
 
 export type Channel = keyof typeof Channels;
@@ -307,12 +312,27 @@ export interface Outputs {
   'data:deleteAll': { ok: true };
   'app:openExternal': { ok: boolean };
   'app:info': { platform: NodeJS.Platform | string; version: string; keychain: string; dataPath: string };
+  'update:get': UpdateState;
+  'update:check': UpdateState;
+  'update:download': { ok: true };
+  'update:install': { ok: true };
 }
+
+/** Where the app is with updates. `manual`: the person asked (show results even when there's nothing new). */
+export type UpdateState = { current: string; manual: boolean } & (
+  | { status: 'idle' | 'checking' }
+  | { status: 'none'; checkedAt: string }
+  | { status: 'available'; version: string; notes: string; canInstall: boolean; url: string }
+  | { status: 'downloading'; version: string; percent: number }
+  | { status: 'ready'; version: string }
+  | { status: 'error'; message: string }
+);
 
 export type Events = {
   'report:progress': BuildProgress;
   'menu:command': { command: string };
   'settings:changed': Partial<Settings>;
+  'update:state': UpdateState;
 };
 
 export interface Api {

@@ -1,6 +1,5 @@
 import { app, BrowserWindow, ipcMain, Menu, nativeTheme, screen, session, shell, type MenuItemConstructorOptions } from 'electron';
 import { join } from 'node:path';
-import { autoUpdater } from 'electron-updater';
 import { Channels, type Channel, type LineComment, type Outputs, type PrListItem } from '../shared/ipc';
 import type { PrRef } from '../shared/model';
 import { relatedPrs } from '../analysis/tickets';
@@ -12,6 +11,7 @@ import { settingsT, cacheGet, cachePut, closeDb, dataDir, db, dbPath, pruneOlder
 import { deleteSecret, getSettings, hasSecrets, keychainName, resetSettingsCache, setSecret, setSettings } from './settings';
 import { listModels, providerInfo, testProvider } from './ai/providers';
 import { testBoard } from './boards';
+import * as updates from './updates';
 import { existsSync, rmSync } from 'node:fs';
 
 const isMac = process.platform === 'darwin';
@@ -206,6 +206,7 @@ const handlers: Handler = {
     const s = setSettings(i);
     nativeTheme.themeSource = s.appearance;
     applyZoom();
+    if ((i as { privacy?: unknown }).privacy) updates.reschedule();
     return s;
   },
   'secrets:set': (i: { name: Parameters<typeof setSecret>[0]; value: string }) => {
@@ -249,6 +250,16 @@ const handlers: Handler = {
 
   'app:openExternal': async (i: { url: string }) => ({ ok: await openExternal(i.url) }),
   'app:info': () => ({ platform: process.platform, version: app.getVersion(), keychain: keychainName(), dataPath: dataDir() }),
+  'update:get': () => updates.current(),
+  'update:check': () => updates.check(true),
+  'update:download': async () => {
+    await updates.download();
+    return { ok: true as const };
+  },
+  'update:install': () => {
+    updates.install();
+    return { ok: true as const };
+  },
 };
 
 function registerIpc(): void {
@@ -284,28 +295,18 @@ function menu(): void {
   const cmd = (command: string) => () => send('menu:command', { command });
   const template: MenuItemConstructorOptions[] = [
     ...(isMac
-      ? [{ label: 'PRsight', submenu: [{ role: 'about' as const }, { type: 'separator' as const }, { label: 'Settings…', accelerator: 'Cmd+,', click: cmd('settings') }, { type: 'separator' as const }, { role: 'hide' as const }, { role: 'hideOthers' as const }, { type: 'separator' as const }, { role: 'quit' as const }] }]
+      ? [{ label: 'PRsight', submenu: [{ role: 'about' as const }, { label: 'Check for Updates…', click: () => void updates.check(true) }, { type: 'separator' as const }, { label: 'Settings…', accelerator: 'Cmd+,', click: cmd('settings') }, { type: 'separator' as const }, { role: 'hide' as const }, { role: 'hideOthers' as const }, { type: 'separator' as const }, { role: 'quit' as const }] }]
       : []),
     { label: 'File', submenu: [{ label: 'Build Report', accelerator: 'CmdOrCtrl+B', click: cmd('build') }, { label: 'Refresh', accelerator: 'CmdOrCtrl+R', click: cmd('refresh') }, ...(isMac ? [] : [{ type: 'separator' as const }, { label: 'Settings…', accelerator: 'Ctrl+,', click: cmd('settings') }, { role: 'quit' as const }]), { type: 'separator' as const }, { role: 'close' as const }] },
     { label: 'Edit', submenu: [{ role: 'undo' }, { role: 'redo' }, { type: 'separator' }, { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }, { type: 'separator' }, { label: 'Find', accelerator: 'CmdOrCtrl+F', click: cmd('find') }, { label: 'Select Related Pull Requests', accelerator: isMac ? 'Alt+Cmd+A' : 'Ctrl+Alt+A', click: cmd('selectRelated') }, { label: 'Deselect All', accelerator: 'Shift+CmdOrCtrl+A', click: cmd('deselectAll') }] },
     { label: 'View', submenu: [{ label: 'Toggle Sidebar', accelerator: isMac ? 'Ctrl+Cmd+S' : 'Ctrl+Shift+S', click: cmd('toggleSidebar') }, { label: 'Toggle Inspector', accelerator: isMac ? 'Alt+Cmd+I' : 'Ctrl+Alt+I', click: cmd('toggleInspector') }, { type: 'separator' }, { label: 'Report', accelerator: 'CmdOrCtrl+1', click: cmd('view:report') }, { label: 'File Map', accelerator: 'CmdOrCtrl+2', click: cmd('view:map') }, { label: 'Changes', accelerator: 'CmdOrCtrl+3', click: cmd('view:changes') }, { label: 'Tickets', accelerator: 'CmdOrCtrl+4', click: cmd('view:tickets') }, { type: 'separator' }, { label: 'Actual Size', accelerator: 'CmdOrCtrl+0', click: () => zoom(0) }, { label: 'Zoom In', accelerator: 'CmdOrCtrl+Plus', click: () => zoom(1) }, { label: 'Zoom Out', accelerator: 'CmdOrCtrl+-', click: () => zoom(-1) }, { type: 'separator' }, { role: 'togglefullscreen' }, ...(app.isPackaged ? [] : [{ role: 'toggleDevTools' as const }])] },
     { label: 'Pull Request', submenu: [{ label: 'Open on GitHub', accelerator: 'Shift+CmdOrCtrl+O', click: cmd('openGithub') }, { label: 'Add to Report', accelerator: 'CmdOrCtrl+D', click: cmd('toggleSelect') }, { label: 'Review…', accelerator: 'Shift+CmdOrCtrl+R', click: cmd('review') }] },
     { role: 'windowMenu' },
-    { role: 'help', submenu: [{ label: 'Claude Code (for the subscription option)', click: () => void shell.openExternal('https://claude.com/claude-code') }] },
+    { role: 'help', submenu: [...(isMac ? [] : [{ label: 'Check for Updates…', click: () => void updates.check(true) }, { type: 'separator' as const }]), { label: 'PRsight Releases', click: () => void shell.openExternal(updates.RELEASES_URL) }, { label: 'Claude Code (for the subscription option)', click: () => void shell.openExternal('https://claude.com/claude-code') }] },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
-function updates(): void {
-  const s = getSettings();
-  if (!app.isPackaged || s.privacy.updateCheck === 'off' || !s.privacy.updateFeed) return;
-  autoUpdater.setFeedURL({ provider: 'generic', url: s.privacy.updateFeed });
-  autoUpdater.autoDownload = false;
-  const every = s.privacy.updateCheck === 'daily' ? 86_400_000 : 7 * 86_400_000;
-  const check = () => void autoUpdater.checkForUpdates().catch(() => undefined);
-  check();
-  setInterval(check, every);
-}
 
 // One copy of the app at a time: a second copy would hold its own settings in memory and could save over yours.
 const gotLock = app.requestSingleInstanceLock();
@@ -341,7 +342,7 @@ app.whenReady().then(() => {
   registerIpc();
   menu();
   createWindow();
-  updates();
+  updates.start((st) => send('update:state', st));
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });

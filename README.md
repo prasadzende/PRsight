@@ -39,19 +39,48 @@ Pick the PRs that belong together and PRsight builds a report from rules, with n
 - **Tickets:** finds Azure DevOps (`AB#123`) and Jira (`KEY-123`) tickets in titles, branches and commits, and can show their details.
 - **Optional AI:** plain-language explanations from your choice of provider, clearly labelled as AI.
 
-## Install
+## Download
 
-There are no prebuilt downloads yet. Build it from source:
+Get the latest version from [Releases](https://github.com/prasadzende/PRsight/releases/latest):
+
+| Your computer | File |
+|---|---|
+| Mac with Apple Silicon (M1 or later) | `PRsight-<version>-mac-arm64.dmg` |
+| Mac with an Intel processor | `PRsight-<version>-mac-x64.dmg` |
+| Windows | `PRsight-<version>-win-x64.exe` |
+
+A new version is released every time a change is merged into `main`.
+
+### First launch
+
+PRsight isn't signed with a paid Apple or Microsoft certificate, so your computer warns you the first time you open it.
+
+- **Mac:** open the `.dmg` and drag PRsight to Applications, then open it.
+  - If macOS says it **can't verify** the app, go to **System Settings › Privacy & Security**, scroll down and click **Open Anyway**.
+  - If it says the app **is damaged**, run this once in Terminal, then open it again:
+    ```bash
+    xattr -dr com.apple.quarantine /Applications/PRsight.app
+    ```
+- **Windows:** if SmartScreen says it protected your PC, click **More info › Run anyway**.
+
+### Updates
+
+PRsight checks for a new version shortly after it starts, then daily. You can change this, or turn it off, in **Settings › Privacy & Data**; **Check for Updates…** in the app menu checks straight away. When there's a new version, a bar at the top of the window tells you:
+
+- **Windows:** click **Update Now**, then **Restart Now** to install it.
+- **Mac:** click **Download** to get the new `.dmg` from GitHub, then replace the app in Applications. macOS only lets signed apps update themselves.
+
+## Build from source
 
 ```bash
-git clone https://github.com/<your-username>/prsight.git
-cd prsight
+git clone https://github.com/prasadzende/PRsight.git
+cd PRsight
 corepack enable      # gives you pnpm
 pnpm install         # also rebuilds the native SQLite module for Electron
 pnpm dev             # starts the app with hot reload
 ```
 
-You need Node 22 or later. To build an installer, run `pnpm package:mac` or `pnpm package:win`. Builds are unsigned unless you set up code signing (see below), so macOS and Windows will warn the first time you open them.
+You need Node 22 or later. To build an installer yourself, run `pnpm package:mac` or `pnpm package:win`; the files land in `dist/`.
 
 ## Sign in
 
@@ -82,7 +111,7 @@ Set an organisation in **Settings › Accounts** to list its PRs and repos. Leav
 - **Network calls are limited.** Only the main process makes requests, and only to an allow-list of hosts: GitHub, your boards and your chosen AI provider. The window itself can't reach the network at all.
 - **AI is off by default.** When you turn it on, tokens, keys, IDs and email addresses are removed before anything is sent. Every report is complete without AI.
 - **GitHub writes happen only when you click.** The app posts comments, replies and reviews and resolves threads only when you press that button. It never writes anything else.
-- **No telemetry.** Update checks are off unless you set an update feed.
+- **No telemetry.** The only call made without you asking is the update check, which reads the latest release from GitHub. Turn it off in **Settings › Privacy & Data**.
 
 See [SECURITY.md](SECURITY.md) to report a vulnerability.
 
@@ -118,10 +147,14 @@ tests/          unit tests and golden tests (with invented fixtures)
 
 [docs/design.md](docs/design.md) explains how the app is built and the choices behind it.
 
-### Code signing
+### Releases
 
-- **macOS:** an Apple Developer ID. Set `notarize: true` in `electron-builder.yml`.
-- **Windows:** an Authenticode certificate.
+`.github/workflows/release.yml` runs on every push to `main` (pushes that only change docs are skipped):
+
+1. **Version:** taken from the first two numbers in `package.json` plus the run number, e.g. `0.1.27`. To start a new line, change `version` in `package.json`, e.g. to `0.2.0`.
+2. **Draft release:** a draft GitHub Release is created with generated notes.
+3. **Builds:** lint, typecheck and tests run on macOS and Windows, then the installers are uploaded to the draft.
+4. **Publish:** once every build has uploaded, the release is published and becomes the one the app updates to. If a build fails, the draft is deleted.
 
 ## Contributing
 
