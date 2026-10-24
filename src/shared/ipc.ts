@@ -230,7 +230,7 @@ export const Channels = {
   'avatars:get': z.object({ logins: z.array(z.string().min(1).max(100)).max(100) }),
   'repos:favourites': z.void(),
   'repos:all': z.object({ offset: z.number().int().min(0), limit: z.number().int().min(1).max(10000) }),
-  'prs:related': z.object({ selected: z.array(z.string()), all: z.array(z.string()) }),
+  'prs:related': z.object({ selected: z.array(z.string()), all: z.array(z.string()), state: z.enum(['open', 'closed']).default('open') }),
 
   'report:build': z.object({ refs: z.array(PrRefZ).min(1).max(10), manualTickets: z.array(z.string().max(30)).max(20).default([]) }),
   'report:list': z.void(),
@@ -290,7 +290,8 @@ export interface Outputs {
   'avatars:get': Record<string, string>;
   'repos:favourites': { starred: string[]; pinned: string[] };
   'repos:all': { names: string[]; total: number };
-  'prs:related': Array<{ id: string; reason: string }>;
+  /** Related PRs (same ticket), the list items for any not in the current list, and the ticket keys searched. */
+  'prs:related': { related: Array<{ id: string; reason: string }>; items: PrListItem[]; keys: string[] };
   'report:build': Report;
   'report:list': ReportListItem[];
   'report:get': Report | null;

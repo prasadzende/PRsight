@@ -23,7 +23,7 @@ Pick the PRs that belong together and PRsight builds a report from rules, with n
 
 ## Features
 
-- **Report:** a verdict and progress bar, a summary of what changes, risks grouped by severity, and a review checklist with blockers first.
+- **Report:** a verdict with what to review next, a card per PR with its open issues and a **Review** button, findings that open with the code and everything about them, and a checklist per PR that ends with Request changes or Approve.
 - **File Map:** a graph of the changed files across all PRs, with the cross-PR links drawn between them.
 - **Cross-PR links**, each backed by the exact file and line:
   - the same rename in two PRs, which must ship together

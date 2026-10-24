@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, Menu, nativeTheme, screen, session, shell,
 import { join } from 'node:path';
 import { Channels, type Channel, type LineComment, type Outputs, type PrListItem } from '../shared/ipc';
 import type { PrRef } from '../shared/model';
-import { relatedPrs } from '../analysis/tickets';
+import { relatedPrs, ticketKeysOf } from '../analysis/tickets';
 import * as auth from './auth';
 import * as gh from './github';
 import * as reports from './reports';
@@ -183,10 +183,29 @@ const handlers: Handler = {
     if (i.event === 'REQUEST_CHANGES' && !i.body.trim()) throw new Error('Say what needs to change in the summary.');
     return { ok: true as const, state: await gh.review(i.ref, i.event, i.body, i.comments ?? [], i.commitId) };
   },
-  'prs:related': (i: { selected: string[]; all: string[] }) => {
+  // Select Related: PRs that share a ticket with the ticked ones. Looks at the loaded list and also searches
+  // GitHub for each ticket number, so PRs in other repos or outside the current filter are found too.
+  'prs:related': async (i: { selected: string[]; all: string[]; state: 'open' | 'closed' }) => {
     const pick = (ids: string[]) => ids.map((id) => ({ id, ...(prCache.get(id) ?? { title: '', branch: '', body: '', state: 'closed' }) }));
     const s = getSettings();
-    return relatedPrs(pick(i.selected), pick(i.all), { ...s.boards.detect, jiraKeys: s.boards.jira.projectKeys, bareAdoNumbers: true }, {}, (p) => p.id).map((r) => ({ id: r.pr.id, reason: r.reason }));
+    const opts = { ...s.boards.detect, jiraKeys: s.boards.jira.projectKeys, bareAdoNumbers: true };
+    const selected = pick(i.selected);
+    const keys = ticketKeysOf(selected, opts);
+    if (!keys.length) return { related: [], items: [], keys: [] };
+    const found = new Map<string, PrListItem>();
+    for (const k of keys.slice(0, 4)) {
+      const list = await gh.listPrs('all', i.state, k.key).catch((e) => {
+        console.error(`[prsight] related search for ${k.label} failed:`, (e as Error).message);
+        return [] as PrListItem[];
+      });
+      for (const p of list) {
+        prCache.set(p.id, { title: p.title, branch: p.branch, body: p.body, state: p.state });
+        found.set(p.id, p);
+      }
+    }
+    const states = i.state === 'closed' ? ['closed', 'merged'] : ['open'];
+    const related = relatedPrs(selected, pick([...new Set([...i.all, ...found.keys()])]), opts, {}, (p) => p.id, states).map((r) => ({ id: r.pr.id, reason: r.reason }));
+    return { related, items: related.map((r) => found.get(r.id)).filter((p): p is PrListItem => !!p), keys: keys.map((k) => k.label) };
   },
 
   'report:build': (i: { refs: PrRef[]; manualTickets: string[] }) => reports.build(i.refs, i.manualTickets, (p) => send('report:progress', p)),

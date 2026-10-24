@@ -23,21 +23,38 @@ export function PrList({ loading }: { loading: boolean }) {
     const p = s.report?.prs.find((x) => `${x.owner}/${x.repo}#${x.number}` === id);
     return p ? { id, owner: p.owner, repo: p.repo, number: p.number, title: p.title, author: p.author, draft: p.draft, state: p.state, branch: p.branch, base: p.base, url: p.url, body: p.body, additions: p.additions, deletions: p.deletions, changedFiles: p.changedFiles, updatedAt: p.updatedAt, reviewRequested: false, teamRequested: false, mine: false, hasDescription: !!p.body?.trim(), hasTicket: true } : null;
   };
+  const find = (id: string) => s.prs.find((p) => p.id === id) ?? s.relatedItems.find((p) => p.id === id) ?? fromReport(id);
+  const onlySelected = s.showSelected && s.selected.length > 0 && !s.reviewSet;
   const list = s.reviewSet
-    ? s.reviewSet.map((id) => s.prs.find((p) => p.id === id) ?? fromReport(id)).filter((p): p is PrListItem => !!p)
-    : s.prs.filter((p) => !s.repo || p.repo === s.repo);
+    ? s.reviewSet.map(find).filter((p): p is PrListItem => !!p)
+    : onlySelected
+      ? s.selected.map(find).filter((p): p is PrListItem => !!p)
+      : s.prs.filter((p) => !s.repo || p.repo === s.repo);
   const noneTicked = s.selected.length === 0;
+  const msg = s.selected.length ? s.relatedMsg : null;
   return (
     <section aria-label="Pull requests" style={{ width: s.widths.list, flex: `0 0 ${s.widths.list}px`, borderRight: '.5px solid var(--sep)', display: 'flex', flexDirection: 'column', background: 'var(--list)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderBottom: '.5px solid var(--sep)' }}>
         <Seg value={s.stateFilter} onChange={(v) => s.set({ stateFilter: v, selected: [] })} label="State" options={[['open', 'Open'], ['closed', 'Closed']]} />
         <span className="t3" style={{ fontSize: 12 }}>{list.length} pull requests</span>
         <span style={{ flex: 1 }} />
-        <button className="push" style={{ fontSize: 12, padding: '2px 8px', opacity: noneTicked ? 0.45 : 1, cursor: noneTicked ? 'default' : 'pointer' }} aria-disabled={noneTicked}
+        <button className="push" style={{ fontSize: 12, padding: '2px 8px', opacity: noneTicked ? 0.45 : 1, cursor: noneTicked ? 'default' : 'pointer' }} aria-disabled={noneTicked || s.relatedBusy}
           title={noneTicked ? 'Tick at least one pull request first' : 'Tick every open pull request for the same ticket'} onClick={() => !noneTicked && void selectRelated()}>
-          Select Related
+          {s.relatedBusy && <Spinner />}
+          {s.relatedBusy ? 'Looking…' : 'Select Related'}
         </button>
       </div>
+      {(msg || onlySelected) && !s.reviewSet && (
+        <div role="status" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', padding: '7px 12px', borderBottom: '.5px solid var(--sep)', fontSize: 12.5, background: msg?.tone === 'error' ? 'color-mix(in srgb, var(--gap) 8%, var(--list))' : 'color-mix(in srgb, var(--accent) 8%, var(--list))' }}>
+          <span style={{ flex: 1, minWidth: 160, color: msg?.tone === 'error' ? 'var(--gap)' : 'var(--text)' }}>
+            {msg?.text ?? `Showing the ${s.selected.length} ticked pull requests.`}
+            {msg && msg.hidden > 0 && !onlySelected && <span className="t2"> {msg.hidden} {msg.hidden === 1 ? 'isn’t' : 'aren’t'} in this list.</span>}
+          </span>
+          {msg && msg.hidden > 0 && !onlySelected && <button className="push" style={{ fontSize: 12 }} onClick={() => s.set({ showSelected: true })}>Show Selected</button>}
+          {onlySelected && <button className="push" style={{ fontSize: 12 }} onClick={() => s.set({ showSelected: false })}>Show All</button>}
+          {msg && <button onClick={() => s.set({ relatedMsg: null })} aria-label="Dismiss" style={{ background: 'none', border: 0, cursor: 'pointer', color: 'var(--text3)', fontSize: 14, padding: '0 2px' }}>×</button>}
+        </div>
+      )}
       {s.reviewSet && (
         <div role="status" style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '8px 12px', borderBottom: '.5px solid var(--sep)', background: 'color-mix(in srgb, var(--accent) 8%, var(--list))' }}>
           <span style={{ fontSize: 12.5 }}>Reviewing the <b style={{ fontWeight: 600 }}>{list.length} PRs</b> in {s.report?.title ?? 'this report'}</span>

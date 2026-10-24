@@ -48,6 +48,18 @@ interface State {
   checks: Record<string, boolean>;
   manualTickets: string[];
   reviewOpen: boolean;
+  /** Select Related: list items found outside the loaded list, the result line, and whether only ticked PRs are shown. */
+  /** Sidebar: the All repositories list is collapsed until opened (favourites always show). */
+  reposOpen: boolean;
+  relatedItems: PrListItem[];
+  relatedMsg: { text: string; hidden: number; tone: 'ok' | 'none' | 'error' } | null;
+  relatedBusy: boolean;
+  showSelected: boolean;
+  /** Opens the review panel pre-filled (from the Report tab's Request changes / Approve). `n` changes per request. */
+  reviewDraft: { prId: string; kind: 'COMMENT' | 'APPROVE' | 'REQUEST_CHANGES'; body: string; n: number } | null;
+  /** Report tab: the finding shown in the detail panel, and the PR whose checklist is shown. */
+  findSel: string | null;
+  chkPr: string | null;
   explaining: boolean;
   listUpdatedAt: number | null;
   listCached: boolean;
@@ -58,6 +70,12 @@ interface State {
   toggleSel: (id: string) => void;
   focusNode: (id: string | null) => void;
   focusLink: (id: string | null) => void;
+  /** Show a file or link in the right-hand panel without leaving the current view. */
+  inspect: (kind: 'node' | 'link', id: string) => void;
+  /** Files and links opened in the right-hand panel, most recent first (for Back and Recently viewed). */
+  visited: Array<{ kind: 'node' | 'link'; id: string }>;
+  /** Back to the item viewed before the current one. */
+  inspectBack: () => void;
 }
 
 const WIDTH_LIMITS = { side: [180, 360], list: [280, 560], insp: [260, 620] } as const;
@@ -69,6 +87,9 @@ const loadWidths = (): State['widths'] => {
     return { side: 230, list: 360, insp: 340 };
   }
 };
+
+/** Most recent first, each item once, at most 8. */
+const remember = (list: Array<{ kind: 'node' | 'link'; id: string }>, kind: 'node' | 'link', id: string) => [{ kind, id }, ...list.filter((v) => !(v.kind === kind && v.id === id))].slice(0, 8);
 
 export const useApp = create<State>((set, get) => ({
   auth: null,
@@ -108,6 +129,14 @@ export const useApp = create<State>((set, get) => ({
   checks: {},
   manualTickets: [],
   reviewOpen: false,
+  reposOpen: false,
+  relatedItems: [],
+  relatedMsg: null,
+  relatedBusy: false,
+  showSelected: false,
+  reviewDraft: null,
+  findSel: null,
+  chkPr: null,
   explaining: false,
   listUpdatedAt: null,
   listCached: false,
@@ -126,10 +155,18 @@ export const useApp = create<State>((set, get) => ({
   set: (p) => set(p),
   toggleSel: (id) => {
     const s = get().selected;
-    set({ selected: s.includes(id) ? s.filter((x) => x !== id) : s.length >= 10 ? s : [...s, id] });
+    // A new tick or untick makes the last Select Related result out of date.
+    set({ selected: s.includes(id) ? s.filter((x) => x !== id) : s.length >= 10 ? s : [...s, id], relatedMsg: null });
   },
-  focusNode: (id) => set({ node: id, link: null, mapView: 'files', tour: 0, inspOpen: true, view: 'map' }),
-  focusLink: (id) => set({ link: id, node: null, mapView: 'files', tour: 0, inspOpen: true, view: 'map' }),
+  focusNode: (id) => set({ node: id, link: null, mapView: 'files', tour: 0, inspOpen: true, view: 'map', ...(id ? { visited: remember(get().visited, 'node', id) } : {}) }),
+  focusLink: (id) => set({ link: id, node: null, mapView: 'files', tour: 0, inspOpen: true, view: 'map', ...(id ? { visited: remember(get().visited, 'link', id) } : {}) }),
+  inspect: (kind, id) => set({ node: kind === 'node' ? id : null, link: kind === 'link' ? id : null, inspOpen: true, visited: remember(get().visited, kind, id) }),
+  visited: [],
+  inspectBack: () => {
+    const [, prev, ...rest] = get().visited;
+    if (!prev) return set({ node: null, link: null });
+    set({ node: prev.kind === 'node' ? prev.id : null, link: prev.kind === 'link' ? prev.id : null, visited: [prev, ...rest] });
+  },
 }));
 
 // ---- Remember UI preferences between launches (this computer only) ----

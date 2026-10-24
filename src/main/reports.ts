@@ -109,6 +109,10 @@ function memoryFor(r: Report): Report['memory'] {
     when: `${m.source} · ${new Date(m.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`,
     text: m.kind === 'request' ? `Reviewers asked: “${m.text}”` : current.has(m.text) ? `Still open: ${m.text}` : `No longer reported: ${m.text}`,
     ok: m.kind === 'request' || !current.has(m.text),
+    kind: m.kind === 'request' ? ('asked' as const) : current.has(m.text) ? ('open' as const) : ('gone' as const),
+    quote: m.text,
+    source: m.source,
+    at: new Date(m.createdAt).toISOString(),
   }));
 }
 

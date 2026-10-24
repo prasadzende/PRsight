@@ -76,6 +76,15 @@ export function ticketSources(s: PrSnapshot, opts: DetectOptions = DEFAULT_DETEC
   return [...src];
 }
 
+/** The ticket keys found in some PRs' titles, branches and descriptions, once each, with a display label. */
+export function ticketKeysOf(prs: Array<{ title: string; branch: string; body?: string }>, opts: DetectOptions = DEFAULT_DETECT): Array<{ system: 'ado' | 'jira'; key: string; label: string }> {
+  const m = new Map<string, { system: 'ado' | 'jira'; key: string; label: string }>();
+  for (const p of prs)
+    for (const k of [...findTicketKeys(p.title, 'title', opts), ...findTicketKeys(p.branch, 'branch', opts), ...findTicketKeys(p.body ?? '', 'description', opts)])
+      m.set(`${k.system}-${k.key}`, { system: k.system, key: k.key, label: k.system === 'ado' ? `AB#${k.key}` : k.key });
+  return [...m.values()];
+}
+
 /** PRs (from a list) that share a ticket with any of the selected PRs. Used by Select Related. */
 export function relatedPrs<T extends { title: string; branch: string; body?: string; state: string }>(
   selected: T[],
@@ -83,6 +92,8 @@ export function relatedPrs<T extends { title: string; branch: string; body?: str
   opts: DetectOptions = DEFAULT_DETECT,
   boardLinked: Record<string, string[]> = {},
   key: (p: T) => string = (p) => p.title,
+  /** PR states to match: open by default; the Closed list matches closed and merged PRs. */
+  states: string[] = ['open'],
 ): Array<{ pr: T; reason: string }> {
   const keysOf = (p: T) =>
     new Set([
@@ -96,7 +107,7 @@ export function relatedPrs<T extends { title: string; branch: string; body?: str
   const selKeys = new Set(selected.map(key));
   const out: Array<{ pr: T; reason: string }> = [];
   for (const p of all) {
-    if (selKeys.has(key(p)) || p.state !== 'open') continue;
+    if (selKeys.has(key(p)) || !states.includes(p.state)) continue;
     const k = [...keysOf(p)].find((x) => wanted.has(x));
     const linked = [...wanted].find((w) => (boardLinked[w] ?? []).includes(key(p)));
     if (k) out.push({ pr: p, reason: `same ticket ${k.replace(/^ado-/, 'AB#').replace(/^jira-/, '')}` });

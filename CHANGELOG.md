@@ -5,6 +5,7 @@ Notable changes to PRsight. The format follows [Keep a Changelog](https://keepac
 ## [Unreleased]
 
 ### Added
+- **Report tab, redesigned:** a card per PR with a Review button; findings grouped as Blocking, Should fix, Check and FYI, each opening with its code, why it matters, file risk, tests and ticket fit; a checklist per PR built from its open issues (including failing checks), ending with Request changes or Approve, pre-filled.
 - **Prebuilt downloads:** for macOS (Apple Silicon and Intel) and Windows, published to GitHub Releases on every push to `main`.
 - **In-app updates:**
   - The app checks for new versions at launch and on a schedule, and shows a bar when one is available.

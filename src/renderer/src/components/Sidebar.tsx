@@ -18,7 +18,7 @@ export function Sidebar() {
   const openReport = async (id: string) => {
     const r = await call('report:get', { id });
     if (r) {
-      s.set({ report: r, section: 'report', view: 'report', mapView: 'story', node: null, link: null, tour: 0, explainError: null });
+      s.set({ report: r, section: 'report', view: 'report', mapView: 'story', node: null, link: null, visited: [], tour: 0, explainError: null });
       if (!r.ai) void autoExplain();
     }
   };
@@ -95,7 +95,9 @@ function RepoList() {
   const order = (list: string[]) => (needle ? list.filter(match).sort((a, b) => rank(a) - rank(b) || a.length - b.length || a.localeCompare(b)) : list);
   const favShown = order(favs);
   const restAll = order(everyRepo);
-  const restShown = restAll.slice(0, limit);
+  // Collapsed by default; a filter always shows its matches.
+  const expanded = s.reposOpen || !!needle;
+  const restShown = expanded ? restAll.slice(0, limit) : [];
 
   const row = (r: string, names: string[]) => <RepoRow key={r} r={r} label={shortName(r, names)} count={counts.get(r)} kind={pinned.includes(r) ? 'pin' : starred.includes(r) ? 'star' : null} on={s.repo === r && s.section === 'prs' && !s.reviewSet}
     onOpen={() => s.set({ repo: s.repo === r ? null : r, section: 'prs', reviewSet: null, selected: [] })} onPin={() => void togglePin(r)} />;
@@ -111,12 +113,19 @@ function RepoList() {
       </label>
       {favShown.length > 0 && <div className="t3" style={{ fontSize: 11, padding: '4px 8px 2px' }}>Favourites</div>}
       {favShown.map((r) => row(r, favShown))}
-      {restShown.length > 0 && <div className="t3" style={{ fontSize: 11, padding: '6px 8px 2px' }}>{needle ? 'Matching repositories' : `All repositories${all.data ? ` · ${all.data.total}` : ''}`}</div>}
+      {needle ? (
+        restShown.length > 0 && <div className="t3" style={{ fontSize: 11, padding: '6px 8px 2px' }}>Matching repositories</div>
+      ) : (
+        <button className="side-row" onClick={() => s.set({ reposOpen: !s.reposOpen })} aria-expanded={s.reposOpen} style={{ fontSize: 11, color: 'var(--text3)', padding: '6px 8px 2px', gap: 6 }}>
+          <span aria-hidden="true" style={{ width: 10, display: 'inline-block' }}>{s.reposOpen ? '⌄' : '›'}</span>
+          All repositories{all.data ? ` · ${all.data.total}` : ''}
+        </button>
+      )}
       {restShown.map((r) => row(r, restShown))}
-      {all.isLoading && <span className="t3" style={{ fontSize: 12, padding: '2px 8px', display: 'flex', gap: 6, alignItems: 'center' }}><Spinner /> Loading repositories…</span>}
+      {all.isLoading && expanded && <span className="t3" style={{ fontSize: 12, padding: '2px 8px', display: 'flex', gap: 6, alignItems: 'center' }}><Spinner /> Loading repositories…</span>}
       {all.error && <span style={{ fontSize: 11.5, padding: '2px 8px', color: 'var(--gap)' }}>Couldn’t load repositories: {(all.error as Error).message}</span>}
       {needle && !favShown.length && !restAll.length && !all.isLoading && <span className="t3" style={{ fontSize: 12, padding: '2px 8px' }}>No matching repositories</span>}
-      {restAll.length > restShown.length && (
+      {expanded && restAll.length > restShown.length && (
         <button className="side-row" onClick={() => setLimit(limit + PAGE)} style={{ color: 'var(--accent)', fontSize: 12.5 }}>
           Load More ({restAll.length - restShown.length} more)
         </button>
