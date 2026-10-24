@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { HygieneCheck } from '@analysis/prHygiene';
 import { Markdown } from './Markdown';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -32,6 +32,7 @@ export function PrDetails() {
   const items = tab === 'threads' ? d.threads : null;
   const effTab = d.threads.length === 0 && tab === 'threads' ? 'conversation' : tab;
   const titleIssues = (d.hygiene ?? []).filter((c) => c.area === 'title' && c.level === 'warn');
+  const draft = s.reviewOpen && s.reviewDraft?.prId === d.pr.id ? s.reviewDraft : null;
   const descIssues = (d.hygiene ?? []).filter((c) => c.area === 'description' && c.level === 'warn');
 
   return (
@@ -47,7 +48,7 @@ export function PrDetails() {
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="push" onClick={() => open(d.pr.url)}><Icon d={ICONS.ext} size={14} />Open on GitHub</button>
             <button className="push" onClick={() => s.toggleSel(d.pr.id)}>{s.selected.includes(d.pr.id) ? '✓ In Report' : 'Add to Report'}</button>
-            <button className="prominent" onClick={() => s.set({ reviewOpen: !s.reviewOpen })} aria-expanded={s.reviewOpen}>Review…</button>
+            <button className="prominent" onClick={() => s.set({ reviewOpen: !s.reviewOpen, reviewDraft: null })} aria-expanded={s.reviewOpen}>Review…</button>
           </div>
         </div>
           <h1 style={{ margin: 0, fontSize: 21, fontWeight: 600, lineHeight: 1.25, ...(titleIssues.length ? { textDecoration: 'underline wavy var(--warn)', textUnderlineOffset: 5, textDecorationThickness: 1.5 } : {}) }} title={titleIssues.map((c) => c.text).join('\n') || undefined}>{d.pr.title}</h1>
@@ -55,10 +56,11 @@ export function PrDetails() {
             <span style={{ display: 'inline-flex', verticalAlign: 'middle', marginRight: 6 }}><Avatar login={d.pr.author} size={18} /></span><b style={{ fontWeight: 600 }}>{d.pr.author}</b> wants to merge <span className="mono" style={{ fontSize: 11.5 }}>{d.pr.branch}</span> into <span className="mono" style={{ fontSize: 11.5 }}>{d.pr.base}</span> · {d.pr.changedFiles} files, +{d.pr.additions} −{d.pr.deletions}
           </span>
       </div>
+      {s.reviewOpen && <ReviewPanel key={draft ? draft.n : 'manual'} d={d} draft={draft} onDone={() => { s.set({ reviewOpen: false, reviewDraft: null }); refresh(); }} />}
       {d.myReview && <MyReview state={d.myReview.state} at={d.myReview.at} />}
       <Hygiene checks={d.hygiene ?? []} />
-      <Description body={d.pr.body} issues={descIssues} />
-      {s.reviewOpen && <ReviewPanel d={d} onDone={() => { s.set({ reviewOpen: false }); refresh(); }} />}
+      {/* Opened from the Report tab's Request changes / Approve: the description starts collapsed so the review comes first. */}
+      <Description key={draft ? `d-${draft.n}` : 'd'} body={d.pr.body} issues={descIssues} startOpen={!draft} />
       <Seg value={effTab} onChange={setTab} label="Comments" options={[['threads', `Review Threads (${d.threads.length})`], ['conversation', `Conversation (${d.conversation.length})`]]} />
       {effTab === 'threads' && items ? (
         items.map((t) => <Thread key={t.id} t={t} d={d} onPosted={refresh} />)
@@ -86,11 +88,20 @@ function MyReview({ state, at }: { state: string; at: string }) {
   );
 }
 
-function ReviewPanel({ d, onDone }: { d: Details; onDone: () => void }) {
-  const [kind, setKind] = useState<'COMMENT' | 'APPROVE' | 'REQUEST_CHANGES'>('COMMENT');
-  const [body, setBody] = useState('');
+function ReviewPanel({ d, draft, onDone }: { d: Details; draft: { kind: 'COMMENT' | 'APPROVE' | 'REQUEST_CHANGES'; body: string } | null; onDone: () => void }) {
+  const [kind, setKind] = useState<'COMMENT' | 'APPROVE' | 'REQUEST_CHANGES'>(draft?.kind ?? 'COMMENT');
+  const [body, setBody] = useState(draft?.body ?? '');
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  const area = useRef<HTMLTextAreaElement>(null);
+  // Opened from the Report tab: bring the review into view and put the cursor in the summary.
+  useEffect(() => {
+    if (!draft) return;
+    box.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    area.current?.focus({ preventScroll: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const own = d.pr.author === d.viewer;
   const shut = d.pr.state !== 'open';
   const opts: Array<[typeof kind, string, string]> = [
@@ -113,10 +124,10 @@ function ReviewPanel({ d, onDone }: { d: Details; onDone: () => void }) {
     }
   };
   return (
-    <div className="card" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <div ref={box} className="card" role="region" aria-label="Finish your review" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 10, scrollMarginTop: 12, ...(draft ? { borderColor: 'var(--accent)', boxShadow: '0 0 0 1px var(--accent)' } : {}) }}>
       <span style={{ fontSize: 14, fontWeight: 600 }}>Finish your review</span>
       <label htmlFor="rv-body" className="sr">Review summary</label>
-      <textarea id="rv-body" rows={3} placeholder="Leave a summary (optional for Approve)" value={body} onChange={(e) => setBody(e.target.value)} style={{ padding: '8px 10px', resize: 'vertical', width: '100%' }} />
+      <textarea ref={area} id="rv-body" rows={draft?.body ? 6 : 3} placeholder="Leave a summary (optional for Approve)" value={body} onChange={(e) => setBody(e.target.value)} style={{ padding: '8px 10px', resize: 'vertical', width: '100%' }} />
       <div role="radiogroup" aria-label="Review type" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {opts.map(([k, label, desc]) => {
           const dis = k !== 'COMMENT' && (own || shut);
@@ -181,8 +192,8 @@ function Hygiene({ checks }: { checks: HygieneCheck[] }) {
 }
 
 /** The PR description, rendered like GitHub, collapsible when long. */
-function Description({ body, issues }: { body: string; issues: HygieneCheck[] }) {
-  const [openD, setOpen] = useState(true);
+function Description({ body, issues, startOpen = true }: { body: string; issues: HygieneCheck[]; startOpen?: boolean }) {
+  const [openD, setOpen] = useState(startOpen);
   const empty = !body?.replace(/<!--[\s\S]*?-->/g, '').trim();
   return (
     <div className="card" style={{ overflow: 'hidden', borderColor: issues.length ? 'color-mix(in srgb, var(--warn) 55%, var(--cardb))' : undefined }}>

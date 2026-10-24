@@ -276,7 +276,7 @@ export interface Report {
   /** Why a ticket's details could not be loaded from the board, by ticket id. */
   ticketErrors?: Record<string, string>;
   /** Notes from past reviews of the same repos (kept on this computer). */
-  memory?: Array<{ repo: string; when: string; text: string; ok: boolean }>;
+  memory?: Array<{ repo: string; when: string; text: string; ok: boolean; kind?: 'asked' | 'open' | 'gone'; quote?: string; source?: string; at?: string }>;
 }
 
 export interface AiNotes {
