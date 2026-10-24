@@ -61,26 +61,27 @@ export function Settings({ dark }: { dark: boolean }) {
 }
 
 type P = { st: S; save: (p: Partial<S>) => Promise<void> };
+export type SettingsProps = P;
 const ADO_AUTH_HELP = {
   azcli: 'Reuses your “az login” in Terminal. Nothing to paste here.',
   pat: 'A token you create in Azure DevOps › User settings › Personal access tokens.',
   entra: 'Your Microsoft account through an Entra app registration (needs tenant and app ID).',
 } as const;
-const Grp = ({ children, ...rest }: { children: ReactNode; role?: string; 'aria-label'?: string }) => <div className="grp" {...rest}>{children}</div>;
-const Row = ({ label, sub, children }: { label: string; sub?: string; children?: ReactNode }) => (
+export const Grp = ({ children, ...rest }: { children: ReactNode; role?: string; 'aria-label'?: string }) => <div className="grp" {...rest}>{children}</div>;
+export const Row = ({ label, sub, children }: { label: string; sub?: string; children?: ReactNode }) => (
   <div className="grow">
     <span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.35, minWidth: 0 }}><span>{label}</span>{sub && <span className="t3" style={{ fontSize: 11.5 }}>{sub}</span>}</span>
     <span style={{ flex: '0 0 auto', display: 'inline-flex', gap: 8, alignItems: 'center' }}>{children}</span>
   </div>
 );
-const Cap = ({ children }: { children?: ReactNode }) => <div className="gcap">{children ?? ' '}</div>;
+export const Cap = ({ children }: { children?: ReactNode }) => <div className="gcap">{children ?? ' '}</div>;
 
-function Text({ value, onSave, placeholder, width = 240, secret }: { value: string; onSave: (v: string) => void; placeholder?: string; width?: number; secret?: boolean }) {
+export function Text({ value, onSave, placeholder, width = 240, secret }: { value: string; onSave: (v: string) => void; placeholder?: string; width?: number; secret?: boolean }) {
   const [v, setV] = useState(value);
   return <input className="field" type={secret ? 'password' : 'text'} value={v} placeholder={placeholder} onChange={(e) => setV(e.target.value)} onBlur={() => v !== value && onSave(v)} style={{ padding: '4px 8px', width }} aria-label={placeholder} />;
 }
 
-function Select<T extends string | number>({ value, options, onChange, label }: { value: T; options: Array<[T, string]>; onChange: (v: T) => void; label: string }) {
+export function Select<T extends string | number>({ value, options, onChange, label }: { value: T; options: Array<[T, string]>; onChange: (v: T) => void; label: string }) {
   return (
     <select className="popup" aria-label={label} value={String(value)} onChange={(e) => onChange((typeof value === 'number' ? Number(e.target.value) : e.target.value) as T)} style={{ color: 'var(--text)' }}>
       {options.map(([v, l]) => <option key={String(v)} value={String(v)}>{l}</option>)}
@@ -104,6 +105,7 @@ function General({ st, save }: P) {
       <Cap />
       <Grp>
         <Row label="Stored data and connections"><button className="push" onClick={() => s.set({ setTab: 'privacy' })}>Privacy &amp; Data…</button></Row>
+        <Row label="Setup" sub="Walks you through AI and a ticket board again"><button className="push" onClick={() => s.set({ settingsOpen: false, setupOpen: true, setupStep: 'ai' })}>Run Setup Again…</button></Row>
       </Grp>
       <Cap>Reports and file snapshots are stored on this computer only.</Cap>
     </>
@@ -146,19 +148,7 @@ function Boards({ st, save }: P) {
         <Row label="Azure DevOps" sub="Read-only. Looks up ticket titles and acceptance criteria."><Switch label="Azure DevOps" checked={b.ado.enabled} onChange={(v) => void save({ boards: { ...b, ado: { ...b.ado, enabled: v } } })} /></Row>
         {b.ado.enabled && (
           <>
-            <Row label="Organisation"><Text value={b.ado.org} onSave={(v) => void save({ boards: { ...b, ado: { ...b.ado, org: v } } })} placeholder="your-org" width={180} /></Row>
-            <Row label="Default project" sub="Optional"><Text value={b.ado.project} onSave={(v) => void save({ boards: { ...b, ado: { ...b.ado, project: v } } })} placeholder="Project" width={180} /></Row>
-            <Row label="Default team board" sub="Optional: scopes suggestions for your team"><Text value={b.ado.team} onSave={(v) => void save({ boards: { ...b, ado: { ...b.ado, team: v } } })} placeholder="Team" width={180} /></Row>
-            <Row label="Sign in with" sub={ADO_AUTH_HELP[b.ado.auth]}>
-              <Select value={b.ado.auth} label="Azure DevOps sign-in" onChange={(v) => void save({ boards: { ...b, ado: { ...b.ado, auth: v } } })} options={[['azcli', 'Azure CLI (az login)'], ['pat', 'Personal access token'], ['entra', 'Entra ID app']]} />
-            </Row>
-            {b.ado.auth === 'pat' && <Row label="Personal access token" sub="Scope: Work Items (Read) only, short expiry. Stored in the system keychain."><SecretInput name="ado" /></Row>}
-            {b.ado.auth === 'entra' && (
-              <>
-                <Row label="Entra tenant ID"><Text value={b.ado.tenantId} onSave={(v) => void save({ boards: { ...b, ado: { ...b.ado, tenantId: v.trim() } } })} placeholder="Tenant ID" width={240} /></Row>
-                <Row label="Entra app (client) ID"><Text value={b.ado.clientId} onSave={(v) => void save({ boards: { ...b, ado: { ...b.ado, clientId: v.trim() } } })} placeholder="App ID" width={240} /></Row>
-              </>
-            )}
+            <AdoFields st={st} save={save} />
             <Row label="Connection" sub={msg.ado}><button className="push" onClick={() => void test('ado')}>Test</button></Row>
           </>
         )}
@@ -168,10 +158,7 @@ function Boards({ st, save }: P) {
         <Row label="Jira" sub="Read-only. Uses an Atlassian API token."><Switch label="Jira" checked={b.jira.enabled} onChange={(v) => void save({ boards: { ...b, jira: { ...b.jira, enabled: v } } })} /></Row>
         {b.jira.enabled && (
           <>
-            <Row label="Site"><Text value={b.jira.site} onSave={(v) => void save({ boards: { ...b, jira: { ...b.jira, site: v.trim() } } })} placeholder="yourcompany.atlassian.net" width={240} /></Row>
-            <Row label="Email"><Text value={b.jira.email} onSave={(v) => void save({ boards: { ...b, jira: { ...b.jira, email: v.trim() } } })} placeholder="you@company.com" width={240} /></Row>
-            <Row label="API token" sub="Stored in the system keychain"><SecretInput name="jira" /></Row>
-            <Row label="Project keys" sub="Optional, e.g. PLAT, OPS"><Text value={b.jira.projectKeys.join(', ')} onSave={(v) => void save({ boards: { ...b, jira: { ...b.jira, projectKeys: v.split(',').map((x) => x.trim().toUpperCase()).filter(Boolean) } } })} placeholder="PLAT" width={180} /></Row>
+            <JiraFields st={st} save={save} />
             <Row label="Connection" sub={msg.jira}><button className="push" onClick={() => void test('jira')}>Test</button></Row>
           </>
         )}
@@ -187,7 +174,42 @@ function Boards({ st, save }: P) {
   );
 }
 
-function SecretInput({ name }: { name: SecretName }) {
+/** Azure DevOps connection fields (shared by Settings › Boards and the setup wizard). */
+export function AdoFields({ st, save }: P) {
+  const b = st.boards;
+  return (
+    <>
+      <Row label="Organisation"><Text value={b.ado.org} onSave={(v) => void save({ boards: { ...b, ado: { ...b.ado, org: v } } })} placeholder="your-org" width={180} /></Row>
+      <Row label="Default project" sub="Optional"><Text value={b.ado.project} onSave={(v) => void save({ boards: { ...b, ado: { ...b.ado, project: v } } })} placeholder="Project" width={180} /></Row>
+      <Row label="Default team board" sub="Optional: scopes suggestions for your team"><Text value={b.ado.team} onSave={(v) => void save({ boards: { ...b, ado: { ...b.ado, team: v } } })} placeholder="Team" width={180} /></Row>
+      <Row label="Sign in with" sub={ADO_AUTH_HELP[b.ado.auth]}>
+        <Select value={b.ado.auth} label="Azure DevOps sign-in" onChange={(v) => void save({ boards: { ...b, ado: { ...b.ado, auth: v } } })} options={[['azcli', 'Azure CLI (az login)'], ['pat', 'Personal access token'], ['entra', 'Entra ID app']]} />
+      </Row>
+      {b.ado.auth === 'pat' && <Row label="Personal access token" sub="Scope: Work Items (Read) only, short expiry. Stored in the system keychain."><SecretInput name="ado" /></Row>}
+      {b.ado.auth === 'entra' && (
+        <>
+          <Row label="Entra tenant ID"><Text value={b.ado.tenantId} onSave={(v) => void save({ boards: { ...b, ado: { ...b.ado, tenantId: v.trim() } } })} placeholder="Tenant ID" width={240} /></Row>
+          <Row label="Entra app (client) ID"><Text value={b.ado.clientId} onSave={(v) => void save({ boards: { ...b, ado: { ...b.ado, clientId: v.trim() } } })} placeholder="App ID" width={240} /></Row>
+        </>
+      )}
+    </>
+  );
+}
+
+/** Jira connection fields (shared by Settings › Boards and the setup wizard). */
+export function JiraFields({ st, save }: P) {
+  const b = st.boards;
+  return (
+    <>
+      <Row label="Site"><Text value={b.jira.site} onSave={(v) => void save({ boards: { ...b, jira: { ...b.jira, site: v.trim() } } })} placeholder="yourcompany.atlassian.net" width={240} /></Row>
+      <Row label="Email"><Text value={b.jira.email} onSave={(v) => void save({ boards: { ...b, jira: { ...b.jira, email: v.trim() } } })} placeholder="you@company.com" width={240} /></Row>
+      <Row label="API token" sub="Stored in the system keychain"><SecretInput name="jira" /></Row>
+      <Row label="Project keys" sub="Optional, e.g. PLAT, OPS"><Text value={b.jira.projectKeys.join(', ')} onSave={(v) => void save({ boards: { ...b, jira: { ...b.jira, projectKeys: v.split(',').map((x) => x.trim().toUpperCase()).filter(Boolean) } } })} placeholder="PLAT" width={180} /></Row>
+    </>
+  );
+}
+
+export function SecretInput({ name }: { name: SecretName }) {
   const qc = useQueryClient();
   const has = useQuery({ queryKey: ['secrets'], queryFn: () => call('secrets:has') });
   const [v, setV] = useState('');
@@ -258,7 +280,7 @@ function Ai({ st, save }: P) {
   );
 }
 
-function ProviderFields({ id, st, save }: { id: ProviderId } & P) {
+export function ProviderFields({ id, st, save }: { id: ProviderId } & P) {
   const a = st.ai;
   const model = () => <ModelPicker id={id} st={st} save={save} />;
   switch (id) {
@@ -295,7 +317,7 @@ function ProviderFields({ id, st, save }: { id: ProviderId } & P) {
   }
 }
 
-const CLI_LABELS: Record<string, string> = { opus: 'Opus (most capable)', sonnet: 'Sonnet (balanced)', haiku: 'Haiku (fastest)' };
+export const CLI_LABELS: Record<string, string> = { opus: 'Opus (most capable)', sonnet: 'Sonnet (balanced)', haiku: 'Haiku (fastest)' };
 
 /** Model choice for one provider: a list (live from the provider when a key is saved), a default, or a custom ID. */
 function ModelPicker({ id, st, save }: { id: ProviderId } & P) {

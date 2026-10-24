@@ -99,6 +99,16 @@ describe('Settings patch', () => {
     expect(patch).toEqual({ appearance: 'dark' });
     expect('ai' in (patch as object)).toBe(false);
   });
+
+  it('starts with setup not done, and saving setupDone keeps every other setting', async () => {
+    const { Channels, SettingsZ } = await import('../src/shared/ipc');
+    const fresh = SettingsZ.parse({});
+    expect(fresh.setupDone).toBe(false);
+    expect(Channels['settings:set'].parse({ setupDone: true })).toEqual({ setupDone: true });
+    const done = SettingsZ.parse({ ...fresh, ai: { ...fresh.ai, enabled: true }, setupDone: true });
+    expect(done.setupDone).toBe(true);
+    expect(done.ai.enabled).toBe(true);
+  });
 });
 
 describe('Line review comments', () => {

@@ -10,6 +10,7 @@ import { PrDetails } from './components/PrDetails';
 import { ReportView } from './components/Report';
 import { Inspector } from './components/Inspector';
 import { Settings } from './components/Settings';
+import { SetupWizard } from './components/SetupWizard';
 import { UpdateBar } from './components/UpdateBar';
 import { Icon, ICONS, Resizer, Seg, Spinner } from './components/ui';
 
@@ -30,6 +31,24 @@ export function App() {
   }, []);
 
   const settings = useQuery({ queryKey: ['settings'], queryFn: () => call('settings:get'), enabled: !!s.auth?.signedIn });
+  // The setup wizard opens once per sign-in while setup isn't done and AI or a ticket board is still unset,
+  // starting at the first step that's missing.
+  const setupChecked = useRef(false);
+  useEffect(() => {
+    if (!s.auth?.signedIn) {
+      setupChecked.current = false;
+      qc.removeQueries({ queryKey: ['settings'] });
+      return;
+    }
+    const d = settings.data;
+    if (!d || setupChecked.current) return;
+    setupChecked.current = true;
+    if (d.setupDone) return;
+    const aiOk = d.ai.enabled;
+    const boardOk = d.boards.ado.enabled || d.boards.jira.enabled;
+    if (!aiOk || !boardOk) s.set({ setupOpen: true, setupStep: aiOk ? 'boards' : 'ai' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [s.auth?.signedIn, settings.data]);
   const every = (settings.data?.refreshMinutes ?? 2) * 60_000;
   const listArgs = { scope: s.scope, state: s.stateFilter, q: s.q, repo: s.repo ?? undefined };
   // The last list saved on this computer shows at once; the live list replaces it when GitHub answers.
@@ -74,6 +93,7 @@ export function App() {
       api.on('menu:command', ({ command }) => {
         const st = useApp.getState();
         if (command === 'settings') st.set({ settingsOpen: true });
+        else if (command === 'setup') st.set({ settingsOpen: false, setupOpen: true, setupStep: 'ai' });
         else if (command === 'build') void buildReport();
         else if (command === 'refresh') void refreshRef.current();
         else if (command === 'selectRelated') void selectRelated();
@@ -116,6 +136,7 @@ export function App() {
         </div>
       </div>
       {s.settingsOpen && <Settings dark={dark} />}
+      {s.setupOpen && !s.settingsOpen && <SetupWizard dark={dark} />}
     </div>
   );
 }

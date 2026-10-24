@@ -44,6 +44,9 @@ interface State {
   sideOpen: boolean;
   inspOpen: boolean;
   settingsOpen: boolean;
+  /** The setup wizard (AI, then a ticket board) and the step it shows. */
+  setupOpen: boolean;
+  setupStep: 'ai' | 'boards' | 'done';
   setTab: 'general' | 'accounts' | 'boards' | 'ai' | 'privacy';
   checks: Record<string, boolean>;
   manualTickets: string[];
@@ -125,6 +128,8 @@ export const useApp = create<State>((set, get) => ({
   sideOpen: true,
   inspOpen: true,
   settingsOpen: false,
+  setupOpen: false,
+  setupStep: 'ai',
   setTab: 'general',
   checks: {},
   manualTickets: [],

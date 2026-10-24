@@ -33,6 +33,8 @@ export const SettingsZ = z.object({
   repos: z.array(z.string()).default([]),
   /** Repos pinned to the top of the sidebar (in addition to your GitHub stars). */
   pinnedRepos: z.array(z.string().max(200)).max(200).default([]),
+  /** The setup wizard was finished or skipped, so it no longer opens on its own. */
+  setupDone: z.boolean().default(false),
   github: z.object({ clientId: z.string().default(''), host: z.string().default('github.com') }).default({ clientId: '', host: 'github.com' }),
   ai: z
     .object({
