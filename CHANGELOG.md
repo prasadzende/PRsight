@@ -6,6 +6,7 @@ Notable changes to PRsight. The format follows [Keep a Changelog](https://keepac
 
 ### Added
 - **Setup wizard:** after you sign in, PRsight walks you through AI (provider, model and a connection test), then a ticket board (Azure DevOps or Jira). You can skip any step, or skip setup. Run it again from Settings › General or **Set Up PRsight…** in the menu.
+- **Model lists update by themselves:** they reload when you save a key or change an endpoint, region or project, each time Settings or setup opens, and every 30 minutes. Microsoft Foundry now loads its list from your endpoint when it can. A saved model the provider no longer offers is flagged.
 - **Report tab, redesigned:** a card per PR with a Review button; findings grouped as Blocking, Should fix, Check and FYI, each opening with its code, why it matters, file risk, tests and ticket fit; a checklist per PR built from its open issues (including failing checks), ending with Request changes or Approve, pre-filled.
 - **Prebuilt downloads:** for macOS (Apple Silicon and Intel) and Windows, published to GitHub Releases on every push to `main`.
 - **In-app updates:**

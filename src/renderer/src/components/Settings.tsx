@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Dialog from '@radix-ui/react-dialog';
 import type { ProviderId, SecretName, Settings as S } from '@shared/ipc';
 import { call, errText } from '../api';
@@ -319,30 +319,49 @@ export function ProviderFields({ id, st, save }: { id: ProviderId } & P) {
 
 export const CLI_LABELS: Record<string, string> = { opus: 'Opus (most capable)', sonnet: 'Sonnet (balanced)', haiku: 'Haiku (fastest)' };
 
-/** Model choice for one provider: a list (live from the provider when a key is saved), a default, or a custom ID. */
+const KEY_OF: Partial<Record<ProviderId, SecretName>> = { anthropic: 'anthropic', openai: 'openai', gemini: 'gemini', foundry: 'foundry', azureopenai: 'azureopenai' };
+
+/**
+ * Model choice for one provider: a list (live from the provider when it can list them), a default, or a custom ID.
+ * The list updates by itself: when a key is saved or removed, when the endpoint, region or project changes,
+ * each time this opens, and every 30 minutes while it is on screen.
+ */
 function ModelPicker({ id, st, save }: { id: ProviderId } & P) {
   const a = st.ai;
-  const q = useQuery({ queryKey: ['models', id], queryFn: () => call('ai:models', { provider: id }), staleTime: 10 * 60_000 });
+  const has = useQuery({ queryKey: ['secrets'], queryFn: () => call('secrets:has') });
+  const key = KEY_OF[id];
+  const deps = [key ? !!has.data?.[key] : null, id === 'foundry' ? a.foundry.endpoint : id === 'bedrock' ? a.bedrock.region : id === 'vertex' ? `${a.vertex.projectId}@${a.vertex.region}` : null];
+  const q = useQuery({
+    queryKey: ['models', id, ...deps],
+    queryFn: () => call('ai:models', { provider: id }),
+    enabled: !key || has.isSuccess,
+    staleTime: 60_000,
+    refetchOnMount: 'always',
+    refetchInterval: 30 * 60_000,
+    placeholderData: keepPreviousData,
+  });
   const [custom, setCustom] = useState(false);
   const cur = a.models[id] ?? '';
   const list = q.data?.models ?? [];
-  const isCustom = custom || (!!cur && !q.isLoading && !list.includes(cur));
+  const loading = !q.data;
+  const gone = !!cur && q.data?.source === 'live' && !q.isPlaceholderData && !list.includes(cur);
+  const isCustom = custom || (!!cur && !loading && !q.isPlaceholderData && !list.includes(cur));
   const set = (v: string) => void save({ ai: { ...a, models: { ...a.models, [id]: v } } });
-  const live = id === 'anthropic' || id === 'openai' || id === 'gemini';
-  const sub = q.data?.note ?? (q.data?.source === 'live' ? `${list.length} models from the provider` : q.data?.source === 'known' ? 'Common models. Choose Custom… for any other model ID.' : undefined);
+  const base = q.data?.note ?? (q.data?.source === 'live' ? `${list.length} models from the provider · updates by itself` : q.data?.source === 'known' ? 'Common models. Choose Custom… for any other model ID.' : undefined);
+  const sub = gone ? `${cur} is no longer offered by the provider. Pick another model.` : q.isFetching && !loading ? 'Updating the list…' : base;
   const defLabel = id === 'claudecode' ? 'Default (your Claude Code setting)' : q.data?.default ? `Default (${q.data.default})` : 'Default';
   return (
     <>
       <Row label="Model" sub={sub}>
         <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
-          <select className="popup" aria-label={`Model for ${id}`} value={isCustom ? '__custom' : cur} disabled={q.isLoading}
+          <select className="popup" aria-label={`Model for ${id}`} value={isCustom ? '__custom' : cur} disabled={loading}
             onChange={(e) => { const v = e.target.value; if (v === '__custom') setCustom(true); else { setCustom(false); set(v); } }}
             style={{ color: 'var(--text)', maxWidth: 240 }}>
-            <option value="">{q.isLoading ? 'Loading models…' : defLabel}</option>
+            <option value="">{loading ? 'Loading models…' : defLabel}</option>
             {list.map((m) => <option key={m} value={m}>{id === 'claudecode' ? CLI_LABELS[m] ?? m : m}</option>)}
             <option value="__custom">Custom…</option>
           </select>
-          {live && <button className="push" style={{ fontSize: 12 }} disabled={q.isFetching} onClick={() => void q.refetch()} title="Load the model list again from the provider">{q.isFetching ? 'Loading…' : 'Refresh'}</button>}
+          {q.isFetching && !loading && <Spinner />}
         </span>
       </Row>
       {isCustom && <Row label="Model ID" sub="Exactly as the provider names it"><Text key={cur} value={cur} onSave={(v) => set(v.trim())} placeholder="Model ID" width={220} /></Row>}

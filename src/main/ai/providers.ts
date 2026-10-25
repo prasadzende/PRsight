@@ -379,6 +379,21 @@ export async function listModels(id: ProviderId): Promise<{ models: string[]; de
       return { models: names.filter((n) => /^gemini/.test(n)).sort().reverse(), default: def, source: 'live' };
     }
     if (id === 'azureopenai') return { models: [], default: def, source: 'none', note: 'Azure OpenAI uses the deployment name above as the model.' };
+    if (id === 'foundry') {
+      // Foundry's Anthropic endpoint may or may not list models: try it, and fall back to the common list quietly.
+      const ep = getSettings().ai.foundry.endpoint.replace(/\/+$/, '').replace(/\/messages$/, '').replace(/\/anthropic\/v1$/, '');
+      const k = getSecret('foundry');
+      if (!ep || !k) return known();
+      try {
+        const res = await safeFetch(`${ep}/anthropic/v1/models`, { headers: { 'x-api-key': k, 'api-key': k, 'anthropic-version': '2023-06-01' } });
+        const j = (await res.json()) as { data?: Array<{ id: string }> };
+        const ids = (j.data ?? []).map((m) => m.id).filter((m) => /^claude-/.test(m));
+        if (res.ok && ids.length) return { models: ids, default: def, source: 'live' };
+      } catch {
+        /* not supported by this endpoint */
+      }
+      return known();
+    }
     return known();
   } catch (e) {
     return { ...known(), note: `Couldn’t load the list: ${(e as Error).message}` };
