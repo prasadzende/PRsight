@@ -47,6 +47,8 @@ export const SettingsZ = z.object({
       bedrock: z.object({ region: z.string().default('eu-west-1') }).default({ region: 'eu-west-1' }),
       vertex: z.object({ projectId: z.string().default(''), region: z.string().default('europe-west1') }).default({ projectId: '', region: 'europe-west1' }),
       allowed: z.array(ProviderIdZ).default(['claudecode', 'foundry', 'anthropic', 'openai', 'azureopenai', 'gemini', 'bedrock', 'vertex']),
+      /** Claude Code CLI chosen by hand, used only when it isn't found automatically. Set only through ai:pickClaude. */
+      claudePath: z.string().max(1024).default(''),
     })
     .prefault({}),
   boards: z
@@ -194,6 +196,8 @@ export interface ProviderInfo {
   needsKey: boolean;
   status: string;
   ready: boolean;
+  /** Claude Code only: found automatically, chosen in Settings, or not found (so the UI asks you to choose it). */
+  claudeSource?: 'auto' | 'chosen' | 'none';
 }
 
 export interface BuildProgress {
@@ -252,6 +256,8 @@ export const Channels = {
   'ai:providers': z.void(),
   'ai:test': z.object({ provider: ProviderIdZ }),
   'ai:models': z.object({ provider: ProviderIdZ }),
+  'ai:pickClaude': z.void(),
+  'ai:clearClaude': z.void(),
   'repos:search': z.object({ q: z.string().min(1).max(100) }),
 
   'boards:test': z.object({ system: z.enum(['ado', 'jira']) }),
@@ -308,6 +314,8 @@ export interface Outputs {
   'ai:providers': ProviderInfo[];
   'ai:test': { ok: boolean; message: string };
   'ai:models': { models: string[]; default: string; source: 'live' | 'known' | 'none'; note?: string };
+  'ai:pickClaude': { ok: boolean; message: string };
+  'ai:clearClaude': { ok: true };
   'repos:search': string[];
   'boards:test': { ok: boolean; message: string };
   'data:usage': StorageUsage;

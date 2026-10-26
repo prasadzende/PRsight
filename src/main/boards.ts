@@ -4,6 +4,7 @@ import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { entraToken, loginShellEnv } from './ai/providers';
+import { viaCmd } from './winSpawn';
 import { safeFetch } from './net';
 import { getSecret, getSettings } from './settings';
 
@@ -47,13 +48,15 @@ function azCliToken(tenantId: string): Promise<string> {
   if (azToken && azToken.expires - Date.now() > 5 * 60_000) return Promise.resolve(azToken.value);
   const env = loginShellEnv();
   const az = findAz(env);
-  if (!az) return Promise.reject(new Error('Azure CLI (az) not found. Install it (brew install azure-cli) or choose another sign-in method in Settings › Boards.'));
+  if (!az) return Promise.reject(new Error(`Azure CLI (az) not found. Install it (${process.platform === 'win32' ? 'winget install Microsoft.AzureCLI' : 'brew install azure-cli'}) or choose another sign-in method in Settings › Boards.`));
   const args = ['account', 'get-access-token', '--resource', ADO_RESOURCE, '--output', 'json', ...(tenantId ? ['--tenant', tenantId] : [])];
   return new Promise((resolve, reject) => {
-    execFile(az, args, { env, timeout: 60_000, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
+    // az is az.cmd on Windows, which Node can only start through cmd.exe.
+    const run = viaCmd(az, args);
+    execFile(run.file, run.args, { env, timeout: 60_000, maxBuffer: 1024 * 1024, windowsHide: true, windowsVerbatimArguments: run.windowsVerbatimArguments }, (err, stdout, stderr) => {
       if (err) {
         const msg = `${stderr || err.message}`;
-        if (/az login|not logged in|AADSTS|expired|interaction/i.test(msg)) return reject(new Error('The Azure CLI is not signed in (or the sign-in expired). Run "az login" in Terminal, then try again.'));
+        if (/az login|not logged in|AADSTS|expired|interaction/i.test(msg)) return reject(new Error(`The Azure CLI is not signed in (or the sign-in expired). Run "az login" in ${process.platform === 'win32' ? 'PowerShell' : 'Terminal'}, then try again.`));
         return reject(new Error(`Azure CLI failed: ${msg.trim().split('\n').pop()}`));
       }
       try {

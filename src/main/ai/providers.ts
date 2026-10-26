@@ -1,10 +1,10 @@
 // AI providers. Only providers the admin policy allows (settings.ai.allowed) can be used.
 // The app never builds a Claude.ai login and never reads Claude Code's stored credentials:
 // the Claude subscription path runs the official, unmodified `claude` CLI.
-import { execFileSync, spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { execFile, execFileSync, spawn } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { safeStorage, shell } from 'electron';
 import { eq } from 'drizzle-orm';
 import { PublicClientApplication, type ICachePlugin } from '@azure/msal-node';
@@ -13,6 +13,7 @@ import type { ProviderId, ProviderInfo } from '../../shared/ipc';
 import { safeFetch } from '../net';
 import { getSecret, getSettings } from '../settings';
 import { PROMPTS, fill } from './prompts.config';
+import { claudeCandidates, isClaudeFile, preferExe, readCmdShim, resolveClaude, type ClaudeSource } from './claudePath';
 
 export const PROVIDERS: Array<Omit<ProviderInfo, 'status' | 'ready'>> = [
   { id: 'claudecode', name: 'Claude subscription (Claude Code)', sub: 'Runs the claude CLI you are signed in to. No API key.', group: 'subscription', needsKey: false },
@@ -46,7 +47,10 @@ function shellLookup(): { env: Record<string, string>; bin: string | null; path:
   if (!loginEnv) {
     const env: Record<string, string> = {};
     let bin: string | null = null;
-    if (process.platform !== 'win32') {
+    if (process.platform === 'win32') {
+      // Windows: look claude up on the PATH (no shell involved). GUI apps on Windows already get your PATH.
+      bin = preferExe(where('claude'));
+    } else {
       try {
         const shell = process.env.SHELL || '/bin/zsh';
         const out = execFileSync(shell, ['-ilc', 'command -v claude; echo "__ENV__"; env -0'], { encoding: 'utf8', timeout: 10000, maxBuffer: 4 * 1024 * 1024 });
@@ -66,18 +70,77 @@ function shellLookup(): { env: Record<string, string>; bin: string | null; path:
   return { ...loginEnv, path: loginEnv.env.PATH || process.env.PATH || '' };
 }
 
-/** The Claude Code CLI. The Claude desktop app on its own does not include it. */
-export function claudeBin(): string | null {
-  const candidates = [
-    join(homedir(), '.claude', 'local', 'claude'),
-    join(homedir(), '.local', 'bin', 'claude'),
-    '/opt/homebrew/bin/claude',
-    '/usr/local/bin/claude',
-    join(homedir(), '.npm-global', 'bin', 'claude'),
-    join(homedir(), '.bun', 'bin', 'claude'),
-    join(homedir(), 'AppData', 'Roaming', 'npm', 'claude.cmd'),
-  ];
-  return shellLookup().bin ?? candidates.find((c) => existsSync(c)) ?? null;
+const isWin = process.platform === 'win32';
+const TERMINAL = isWin ? 'PowerShell' : 'Terminal';
+
+/** `where.exe name` on Windows: the matching files that exist, in PATH order. */
+function where(name: string): string[] {
+  try {
+    const out = execFileSync('where.exe', [name], { encoding: 'utf8', timeout: 10000, windowsHide: true });
+    return out.split(/\r?\n/).map((l) => l.trim()).filter((l) => l && existsSync(l));
+  } catch {
+    return []; // where.exe exits non-zero when nothing matches
+  }
+}
+
+/**
+ * The Claude Code CLI (the Claude desktop app on its own does not include it). Found automatically first:
+ * the PATH, then the usual install locations. If that finds nothing, the path chosen in Settings › AI.
+ */
+export function findClaude(): { bin: string | null; source: ClaudeSource; chosenMissing: boolean } {
+  const auto = shellLookup().bin ?? claudeCandidates(homedir(), process.env, process.platform).find((c) => existsSync(c)) ?? null;
+  return resolveClaude(auto, getSettings().ai.claudePath, (f) => isClaudeFile(f, process.platform) && existsSync(f));
+}
+export const claudeBin = (): string | null => findClaude().bin;
+
+/** Forget the cached lookup, so a Claude Code installed while the app is open is found. */
+export function resetClaudeLookup(): void {
+  loginEnv = null;
+}
+
+/** What to actually start for `bin`. On Windows an npm `claude.cmd` is unwrapped to the node script or .exe it runs. */
+function claudeLaunch(bin: string): { file: string; pre: string[] } {
+  if (!isWin || !/\.cmd$/i.test(bin)) return { file: bin, pre: [] };
+  const shim = readCmdShim(readFileSync(bin, 'utf8'), dirname(bin));
+  if (shim?.kind === 'exe' && existsSync(shim.target)) return { file: shim.target, pre: [] };
+  if (shim?.kind === 'js' && existsSync(shim.target)) {
+    const local = join(dirname(bin), 'node.exe');
+    const node = existsSync(local) ? local : where('node').find((l) => /\.exe$/i.test(l));
+    if (node) return { file: node, pre: [shim.target] };
+    throw new Error(`${bin} needs Node.js, which was not found. Install Node.js, or install Claude Code with the native installer and choose claude.exe.`);
+  }
+  throw new Error(`Couldn't work out how to start ${bin}. Choose claude.exe instead (the native installer puts it in %USERPROFILE%\\.local\\bin).`);
+}
+
+/** The environment Claude Code runs with: your login shell's on macOS, without Electron's own variables. */
+function claudeEnv(): Record<string, string | undefined> {
+  const login = shellLookup();
+  // On Windows the variable is spelled Path; adding PATH as well would give the child two of them.
+  const env: Record<string, string | undefined> = isWin ? { ...process.env } : { ...process.env, ...login.env, PATH: login.path };
+  // Electron's own variables can confuse a Node-based CLI.
+  delete env.ELECTRON_RUN_AS_NODE;
+  delete env.NODE_OPTIONS;
+  delete env.ELECTRON_RENDERER_URL;
+  return env;
+}
+
+/** Checks that `file` really is Claude Code (by its name, then `claude --version`) before it is saved in Settings. */
+export function verifyClaude(file: string): Promise<{ ok: boolean; message: string }> {
+  if (!isClaudeFile(file, process.platform)) return Promise.resolve({ ok: false, message: isWin ? 'Choose claude.exe (or claude.cmd from an npm install).' : 'Choose the file named claude.' });
+  if (!existsSync(file)) return Promise.resolve({ ok: false, message: 'That file no longer exists.' });
+  let launch: { file: string; pre: string[] };
+  try {
+    launch = claudeLaunch(file);
+  } catch (e) {
+    return Promise.resolve({ ok: false, message: (e as Error).message });
+  }
+  return new Promise((resolve) => {
+    execFile(launch.file, [...launch.pre, '--version'], { env: claudeEnv(), timeout: 20_000, windowsHide: true, cwd: tmpdir() }, (err, stdout) => {
+      const v = `${stdout}`.trim();
+      if (!err && /claude code/i.test(v)) return resolve({ ok: true, message: `Using Claude Code ${v.replace(/\s*\(claude code\)\s*/i, '')}` });
+      resolve({ ok: false, message: 'That file did not answer like Claude Code (claude --version). Choose the claude program itself.' });
+    });
+  });
 }
 
 export function providerInfo(): ProviderInfo[] {
@@ -85,12 +148,14 @@ export function providerInfo(): ProviderInfo[] {
   return PROVIDERS.filter((p) => s.ai.allowed.includes(p.id)).map((p) => {
     let ready = false;
     let status = 'Not set up';
+    let claudeSource: ClaudeSource | undefined;
     switch (p.id) {
       case 'claudecode':
         {
-          const bin = claudeBin();
-          ready = !!bin;
-          status = bin ? `Using ${bin.replace(homedir(), '~')}` : 'Claude Code CLI not found';
+          const c = findClaude();
+          ready = !!c.bin;
+          status = c.bin ? `Using ${c.bin.replace(homedir(), '~')}${c.source === 'chosen' ? ' (chosen)' : ''}` : c.chosenMissing ? 'The claude you chose is no longer there' : 'Claude Code CLI not found';
+          claudeSource = c.source;
         }
         break;
       case 'foundry':
@@ -113,7 +178,7 @@ export function providerInfo(): ProviderInfo[] {
         ready = !!getSecret(p.id as 'anthropic' | 'openai' | 'gemini');
         status = ready ? 'Key saved' : 'Add a key';
     }
-    return { ...p, ready, status };
+    return { ...p, ready, status, ...(claudeSource ? { claudeSource } : {}) };
   });
 }
 
@@ -162,6 +227,7 @@ export async function testProvider(id: ProviderId): Promise<{ ok: boolean; messa
   const prev = s.ai.provider;
   try {
     s.ai.provider = id;
+    if (id === 'claudecode') resetClaudeLookup();
     const out = await complete(PROMPTS.test.system, PROMPTS.test.user);
     return { ok: /ok/i.test(out), message: /ok/i.test(out) ? 'Connected' : `Unexpected reply: ${out.slice(0, 80)}` };
   } catch (e) {
@@ -215,19 +281,30 @@ async function gemini(system: string, user: string, schema?: JsonSchema): Promis
   return j.candidates?.[0]?.content.parts.map((p) => p.text).join('') ?? '';
 }
 
+/**
+ * macOS apps opened from the Dock or Finder don't get your shell's AWS / Google settings (profile, region, credentials
+ * file), so the SDKs would find no credentials or the wrong profile. Copy just those from the login shell. Windows apps
+ * already get your user environment.
+ */
+function shareCloudEnv(): void {
+  if (isWin) return;
+  for (const [k, v] of Object.entries(shellLookup().env)) if (/^(AWS_|GOOGLE_|GCLOUD_|CLOUDSDK_)/.test(k) && process.env[k] === undefined) process.env[k] = v;
+}
+
 async function sdkMessages(kind: 'bedrock' | 'vertex', system: string, user: string, schema?: JsonSchema): Promise<string> {
   const s = getSettings();
   // Optional dependencies, loaded only when chosen. They use the standard AWS / Google credential chains.
+  shareCloudEnv();
   type Client = { messages: { create: (a: unknown) => Promise<{ content: ClaudeBlock[] }> } };
   let client: Client;
   if (kind === 'bedrock') {
     const name = '@anthropic-ai/bedrock-sdk';
     const mod = (await import(/* @vite-ignore */ name)) as { AnthropicBedrock: new (o: unknown) => Client };
-    client = new mod.AnthropicBedrock({ awsRegion: s.ai.bedrock.region });
+    client = new mod.AnthropicBedrock({ awsRegion: s.ai.bedrock.region, fetch: safeFetch });
   } else {
     const name = '@anthropic-ai/vertex-sdk';
     const mod = (await import(/* @vite-ignore */ name)) as { AnthropicVertex: new (o: unknown) => Client };
-    client = new mod.AnthropicVertex({ projectId: s.ai.vertex.projectId, region: s.ai.vertex.region });
+    client = new mod.AnthropicVertex({ projectId: s.ai.vertex.projectId, region: s.ai.vertex.region, fetch: safeFetch });
   }
   const r = await client.messages.create({ model: model(kind), max_tokens: 4000, system, messages: [{ role: 'user', content: user }], ...claudeTools(schema) });
   return claudeText(r.content);
@@ -235,19 +312,20 @@ async function sdkMessages(kind: 'bedrock' | 'vertex', system: string, user: str
 
 function claudeCli(system: string, user: string): Promise<string> {
   const bin = claudeBin();
-  if (!bin) return Promise.reject(new Error('The Claude Code command-line tool (claude) was not found. The Claude desktop app does not include it: install Claude Code, run `claude` once in Terminal to sign in with your subscription, then try again.'));
-  const login = shellLookup();
-  const env: Record<string, string | undefined> = { ...process.env, ...login.env, PATH: login.path };
-  // Electron's own variables can confuse a Node-based CLI.
-  delete env.ELECTRON_RUN_AS_NODE;
-  delete env.NODE_OPTIONS;
-  delete env.ELECTRON_RENDERER_URL;
+  if (!bin) return Promise.reject(new Error(`The Claude Code command-line tool (claude) was not found. The Claude desktop app does not include it: install Claude Code and run \`claude\` once in ${TERMINAL} to sign in with your subscription. If it is installed somewhere unusual, choose it in Settings › AI › Claude subscription.`));
+  let launch: { file: string; pre: string[] };
+  try {
+    launch = claudeLaunch(bin);
+  } catch (e) {
+    return Promise.reject(e as Error);
+  }
+  const env = claudeEnv();
   const args = ['-p', '--output-format', 'json', '--append-system-prompt', system];
   const m = getSettings().ai.models.claudecode;
   if (m) args.push('--model', m);
   return new Promise((resolve, reject) => {
     // Run outside any project folder so Claude Code doesn't pick up a repo's CLAUDE.md or settings.
-    const child = spawn(bin, args, { stdio: ['pipe', 'pipe', 'pipe'], timeout: 240_000, env, cwd: tmpdir() });
+    const child = spawn(launch.file, [...launch.pre, ...args], { stdio: ['pipe', 'pipe', 'pipe'], timeout: 240_000, env, cwd: tmpdir(), windowsHide: true });
     let out = '';
     let err = '';
     child.stdout.on('data', (d) => (out += d));
@@ -265,8 +343,9 @@ function claudeCli(system: string, user: string): Promise<string> {
       const reason = (j?.result || err.trim().split('\n').filter(Boolean).pop() || out.trim().split('\n').filter(Boolean).pop() || '').slice(0, 400);
       console.error(`[prsight] claude exited with ${code ?? signal}\nstdout: ${out.slice(0, 2000)}\nstderr: ${err.slice(0, 2000)}`);
       if (signal === 'SIGTERM') return reject(new Error('Claude Code took too long (over 4 minutes) and was stopped. Try again, or pick a smaller set of PRs.'));
-      if (/not logged in|please run \/login|invalid api key|authentication/i.test(reason)) return reject(new Error(`Claude Code says it is not signed in (${reason}). It ran ${bin}. If that is not the claude you use in Terminal, run \`which claude\` there and tell us.`));
-      reject(new Error(reason ? `Claude Code: ${reason}` : `Claude Code exited with code ${code} and no message. Run \`claude -p "say OK"\` in Terminal to check it works.`));
+      if (/not logged in|please run \/login|invalid api key|authentication/i.test(reason)) return reject(new Error(`Claude Code says it is not signed in (${reason}). It ran ${bin}. Run \`claude\` once in ${TERMINAL} to sign in. If that is not the claude you use there, run \`${isWin ? 'where.exe claude' : 'which claude'}\` to see which one is.`));
+      if (/git-bash|CLAUDE_CODE_GIT_BASH_PATH/i.test(reason)) return reject(new Error('Claude Code on Windows needs Git for Windows (Git Bash). Install it, or set CLAUDE_CODE_GIT_BASH_PATH to your bash.exe, then try again.'));
+      reject(new Error(reason ? `Claude Code: ${reason}` : `Claude Code exited with code ${code} and no message. Run \`claude -p "say OK"\` in ${TERMINAL} to check it works.`));
     });
     child.stdin.end(user);
   });

@@ -1,5 +1,6 @@
-import { app, BrowserWindow, ipcMain, Menu, nativeTheme, screen, session, shell, type MenuItemConstructorOptions } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, screen, session, shell, type MenuItemConstructorOptions, type OpenDialogOptions } from 'electron';
 import { join } from 'node:path';
+import { homedir } from 'node:os';
 import { Channels, type Channel, type LineComment, type Outputs, type PrListItem } from '../shared/ipc';
 import type { PrRef } from '../shared/model';
 import { relatedPrs, ticketKeysOf } from '../analysis/tickets';
@@ -9,7 +10,7 @@ import * as reports from './reports';
 import { eq } from 'drizzle-orm';
 import { settingsT, cacheGet, cachePut, closeDb, dataDir, db, dbPath, pruneOlderThan, usage, cacheT, reportsT, memoryT, lastReviewT } from './db';
 import { deleteSecret, getSettings, hasSecrets, keychainName, resetSettingsCache, setSecret, setSettings } from './settings';
-import { listModels, providerInfo, testProvider } from './ai/providers';
+import { listModels, providerInfo, testProvider, verifyClaude } from './ai/providers';
 import { testBoard } from './boards';
 import * as updates from './updates';
 import { existsSync, rmSync } from 'node:fs';
@@ -222,6 +223,9 @@ const handlers: Handler = {
   'repos:search': (i: { q: string }) => gh.searchRepos(i.q),
   'ai:models': (i: { provider: Parameters<typeof listModels>[0] }) => listModels(i.provider),
   'settings:set': (i: Parameters<typeof setSettings>[0]) => {
+    // The Claude Code path is a program the app will run, so it is only set through ai:pickClaude (checked here in main).
+    const ai = (i as { ai?: Record<string, unknown> }).ai;
+    if (ai && typeof ai === 'object') delete ai.claudePath;
     const s = setSettings(i);
     nativeTheme.themeSource = s.appearance;
     applyZoom();
@@ -240,6 +244,27 @@ const handlers: Handler = {
 
   'ai:providers': () => providerInfo(),
   'ai:test': (i: { provider: Parameters<typeof testProvider>[0] }) => testProvider(i.provider),
+  'ai:pickClaude': async () => {
+    const bin = join(homedir(), '.local', 'bin');
+    const opts: OpenDialogOptions = {
+      title: 'Choose Claude Code (claude)',
+      buttonLabel: 'Use This',
+      defaultPath: existsSync(bin) ? bin : homedir(),
+      // noResolveAliases: keep ~/.local/bin/claude itself on macOS, not the versioned file the link points to.
+      properties: ['openFile', 'showHiddenFiles', 'dontAddToRecent', 'noResolveAliases'],
+      ...(process.platform === 'win32' ? { filters: [{ name: 'Claude Code', extensions: ['exe', 'cmd'] }] } : {}),
+    };
+    const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts);
+    const file = r.filePaths[0];
+    if (r.canceled || !file) return { ok: false, message: '' };
+    const v = await verifyClaude(file);
+    if (v.ok) setSettings({ ai: { ...getSettings().ai, claudePath: file } });
+    return v;
+  },
+  'ai:clearClaude': () => {
+    setSettings({ ai: { ...getSettings().ai, claudePath: '' } });
+    return { ok: true as const };
+  },
   'boards:test': (i: { system: 'ado' | 'jira' }) => testBoard(i.system),
 
   'data:usage': () => {

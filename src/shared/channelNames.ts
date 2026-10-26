@@ -35,6 +35,8 @@ export const CHANNEL_NAMES = [
   'ai:providers',
   'ai:test',
   'ai:models',
+  'ai:pickClaude',
+  'ai:clearClaude',
   'repos:search',
   'boards:test',
   'data:usage',

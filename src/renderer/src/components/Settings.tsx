@@ -285,7 +285,7 @@ export function ProviderFields({ id, st, save }: { id: ProviderId } & P) {
   const model = () => <ModelPicker id={id} st={st} save={save} />;
   switch (id) {
     case 'claudecode':
-      return <><Row label="How it works" sub="Runs the official claude CLI with your own sign-in. The app never sees your Claude password or tokens." />{model()}</>;
+      return <><Row label="How it works" sub="Runs the official claude CLI with your own sign-in. The app never sees your Claude password or tokens." /><ClaudePathRow provider={a.provider} />{model()}</>;
     case 'foundry':
       return (
         <>
@@ -315,6 +315,57 @@ export function ProviderFields({ id, st, save }: { id: ProviderId } & P) {
     default:
       return <><Row label="API key" sub="Stored in the system keychain"><SecretInput name={id as SecretName} /></Row>{model()}</>;
   }
+}
+
+/**
+ * Where the claude CLI is. It is found automatically (PATH, then the usual install folders);
+ * only when that fails are you asked to choose it. The choice is checked in main before it is saved.
+ */
+function ClaudePathRow({ provider }: { provider: ProviderId }) {
+  const qc = useQueryClient();
+  const providers = useQuery({ queryKey: ['providers', provider], queryFn: () => call('ai:providers') });
+  const p = providers.data?.find((x) => x.id === 'claudecode');
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const refresh = () => {
+    void qc.invalidateQueries({ queryKey: ['providers'] });
+    void qc.invalidateQueries({ queryKey: ['settings'] });
+  };
+  const choose = async () => {
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await call('ai:pickClaude');
+      if (r.message) setMsg({ ok: r.ok, text: r.message });
+      refresh();
+    } catch (e) {
+      setMsg({ ok: false, text: errText(e) });
+    } finally {
+      setBusy(false);
+    }
+  };
+  const forget = async () => {
+    await call('ai:clearClaude');
+    setMsg(null);
+    refresh();
+  };
+  const note = msg && <span role="status" style={{ fontSize: 12, color: msg.ok ? 'var(--al)' : 'var(--warn)' }}>{msg.text}</span>;
+  if (!p || p.claudeSource === 'auto') return note ? <Row label="Claude Code">{note}</Row> : null;
+  if (p.claudeSource === 'chosen') {
+    return (
+      <Row label="Claude Code location" sub="Chosen by you, because it wasn't found automatically.">
+        {note}
+        <button className="push" disabled={busy} onClick={() => void choose()}>Change…</button>
+        <button className="push" disabled={busy} onClick={() => void forget()}>Forget</button>
+      </Row>
+    );
+  }
+  return (
+    <Row label="Claude Code not found" sub={'Install Claude Code, or show the app where it is: usually ~/.local/bin/claude on macOS, or %USERPROFILE%\\.local\\bin\\claude.exe on Windows.'}>
+      {note}
+      <button className="push" disabled={busy} onClick={() => void choose()}>{busy ? 'Checking…' : 'Choose…'}</button>
+    </Row>
+  );
 }
 
 export const CLI_LABELS: Record<string, string> = { opus: 'Opus (most capable)', sonnet: 'Sonnet (balanced)', haiku: 'Haiku (fastest)' };
